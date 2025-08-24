@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Sistema Contable MX</title>
+  <style>
+    body{margin:0;font-family:Arial, sans-serif;background:#fff;color:#000;}
+    nav{position:fixed;top:0;left:0;width:160px;height:100vh;background:#000;color:#fff;}
+    nav a{display:block;padding:10px;color:#CBE290;text-decoration:none;}
+    nav a:hover{background:#402924;color:#fff;}
+    main{margin-left:160px;padding:1rem;}
+    section{display:none;}
+    section.active{display:block;}
+    #toast{position:fixed;bottom:1rem;right:1rem;background:#000B26;color:#fff;padding:8px 12px;border-radius:4px;display:none;}
+    a,select,button{color:#7CA7EB;}
+  </style>
+  <script>
+    function showSection(id){
+      document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+    function toast(msg,link){
+      const t=document.getElementById('toast');
+      t.innerHTML=link?`<a href="${link}" target="_blank" style="color:#7CA7EB">${msg}</a>`:msg;
+      t.style.display='block';
+      setTimeout(()=>t.style.display='none',4000);
+    }
+    function savePeriodo(sel){
+      google.script.run.withSuccessHandler(()=>toast('Periodo guardado')).apiSetConfig('PERIODO_LABEL', sel.value);
+    }
+    function init(){
+      google.script.run.withSuccessHandler(ps=>{
+        const sel=document.getElementById('periodo');
+        ps.forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;sel.add(o);});
+        google.script.run.withSuccessHandler(v=>{sel.value=v||ps[0];}).apiGetConfig('PERIODO_LABEL');
+      }).getPeriodosUI();
+    }
+  </script>
+</head>
+<body onload="init()">
+<nav>
+  <a href="#" onclick="showSection('setup')">Setup</a>
+  <a href="#" onclick="showSection('importar')">Importar</a>
+  <a href="#" onclick="showSection('conta')">Contabilizar</a>
+  <a href="#" onclick="showSection('imp')">Impuestos</a>
+  <a href="#" onclick="showSection('entrega')">Entrega</a>
+  <a href="#" onclick="showSection('tablas')">Tablas</a>
+</nav>
+<main>
+  <section id="setup" class="active">
+    <h2>Setup</h2>
+    <label>Periodo:</label>
+    <select id="periodo" onchange="savePeriodo(this)"></select>
+  </section>
+  <section id="importar"><h2>Importar</h2></section>
+  <section id="conta"><h2>Contabilizar</h2></section>
+  <section id="imp"><h2>Impuestos</h2></section>
+  <section id="entrega"><h2>Entrega</h2></section>
+  <section id="tablas"><h2>Tablas</h2></section>
+</main>
+<div id="toast"></div>
+</body>
+</html>

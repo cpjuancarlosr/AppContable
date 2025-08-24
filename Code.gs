@@ -25,6 +25,9 @@ const CFG = {
   CORREOS_DESTINO: ""
 };
 
+// Cache para configuraciones; evita lecturas repetidas de la hoja Config
+let CFG_CACHE = null;
+
 /********************  MENÚ UI (SEGURO)  ********************/
 function onOpen(e){ if (!canUseUi_()) return; buildMenu_(); }
 function buildMenu_(){
@@ -39,6 +42,9 @@ function buildMenu_(){
     .addItem("🧩 Generar Pólizas", "generarPolizasDesdeMovimientos")
     .addItem("📐 Recalcular Estados + KPIs", "recalcularEstados")
     .addItem("🏦 Conciliar Bancos (avanzada)", "conciliarBancariaAvanzada")
+    .addSeparator()
+    .addItem("📅 Abrir Periodo", "abrirPeriodo")
+    .addItem("📕 Cerrar Periodo", "cerrarPeriodo")
     .addSeparator()
     .addItem("🧾 Calcular IVA mensual", "calcularIVA_Mensual")
     .addItem("💸 Calcular ISR PM mensual", "calcularISR_PM_Mensual")
@@ -74,6 +80,7 @@ function setupSistemaMX(){
   prepararBancos();
   prepararPolizasMayor();
   prepararEstadosPlantillas();
+  prepararPeriodos();
   aplicarTemaVisual();
 
   // Crear carpetas del sistema y guardar IDs en Config
@@ -194,6 +201,26 @@ function prepararEstadosPlantillas(){
   ]);
   const pagos = SpreadsheetApp.getActive().getSheetByName("PagosImpuestos"); pagos.clear(); pagos.getRange(1,1,1,7).setValues([["Periodo","Impuesto","Base","Tasa","Importe","Fecha Pago","Acuse URL"]]).setFontWeight("bold");
   const diot = SpreadsheetApp.getActive().getSheetByName("DIOT"); diot.clear(); diot.getRange(1,1,1,8).setValues([["RFC","Proveedor","Tipo","Base 16%","IVA 16%","Base 8%","IVA 8%","Exento"]]).setFontWeight("bold");
+}
+
+function prepararPeriodos(){
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("Periodos") || ss.insertSheet("Periodos");
+  sh.clear();
+  sh.getRange(1,1,1,2).setValues([["Periodo","Estado"]]).setFontWeight("bold");
+  const now = new Date();
+  const rows=[];
+  for (let i=-12;i<=12;i++){
+    const d=new Date(now.getFullYear(), now.getMonth()+i,1);
+    const label=`${d.getFullYear()}-${("0"+(d.getMonth()+1)).slice(-2)}`;
+    rows.push([label,"Abierto"]);
+  }
+  if (rows.length) sh.getRange(2,1,rows.length,2).setValues(rows);
+  const cfg = ss.getSheetByName("Config");
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sh.getRange(2,1,rows.length,1), true).build();
+  const row = getCfgRow_("PERIODO_LABEL");
+  if (row>0) cfg.getRange(row,2).setDataValidation(rule);
 }
 
 /********************  TEMA VISUAL  ********************/
@@ -502,7 +529,37 @@ function periodo_(){
   }
   const label = `${y}-${("0"+m).slice(-2)}`;
   const ini=new Date(y,m-1,1), fin=new Date(y,m,0); fin.setHours(23,59,59,999);
-  return {ini,fin,label, cerrado:false};
+  const cerrado = String(getCfg("PERIODO_CERRADO")||"") === "1";
+  return {ini,fin,label,cerrado};
+}
+
+function periodosSheet_(){
+  const ss = SpreadsheetApp.getActive();
+  return ss.getSheetByName("Periodos") || ss.insertSheet("Periodos");
+}
+
+function abrirPeriodo(label){
+  const sh = periodosSheet_();
+  const per = label || getCfg("PERIODO_LABEL");
+  if (label) setCfg_("PERIODO_LABEL", per);
+  const vals = sh.getRange(2,1,Math.max(0,sh.getLastRow()-1),2).getValues();
+  for (let i=0;i<vals.length;i++){
+    if (vals[i][0] === per){ sh.getRange(i+2,2).setValue("Abierto"); break; }
+  }
+  setCfg_("PERIODO_CERRADO", "");
+  log(`Periodo ${per} abierto`);
+}
+
+function cerrarPeriodo(label){
+  const sh = periodosSheet_();
+  const per = label || getCfg("PERIODO_LABEL");
+  if (label) setCfg_("PERIODO_LABEL", per);
+  const vals = sh.getRange(2,1,Math.max(0,sh.getLastRow()-1),2).getValues();
+  for (let i=0;i<vals.length;i++){
+    if (vals[i][0] === per){ sh.getRange(i+2,2).setValue("Cerrado"); break; }
+  }
+  setCfg_("PERIODO_CERRADO", "1");
+  log(`Periodo ${per} cerrado`);
 }
 
 function calcularIVA_Mensual(){
@@ -608,9 +665,47 @@ function generarNotaKeep(){ const pr=periodo_(); const doc=DocumentApp.create(`N
 
 /********************  UTILIDADES  ********************/
 function getOrCreateSheet(ss,name){ return ss.getSheetByName(name)||ss.insertSheet(name); }
-function getCfg(clave){ try{ const v=SpreadsheetApp.getActive().getSheetByName("Config"); if(!v) return null; const last=v.getLastRow(); if(last<2) return null; const vals=v.getRange(2,1,last-1,2).getValues(); for(let r of vals){ if(r[0]===clave) return r[1]; } }catch(e){} return null; }
-function getCfgRow_(clave){ const v=SpreadsheetApp.getActive().getSheetByName("Config"); if(!v) return -1; const last=v.getLastRow(); if(last<2) return -1; const vals=v.getRange(2,1,last-1,1).getValues(); for(let i=0;i<vals.length;i++){ if(vals[i][0]===clave) return i+2; } return -1; }
-function setCfg_(clave, valor){ const v=SpreadsheetApp.getActive().getSheetByName("Config"); const row=getCfgRow_(clave); if(row>0){ v.getRange(row,2).setValue(valor); } else { const lr=v.getLastRow(); v.getRange(lr+1,1,1,3).setValues([[clave,valor,""]]); } }
+
+// --- Configuración con caché ---
+function configSheet_(){ return SpreadsheetApp.getActive().getSheetByName("Config"); }
+function loadCfg_(){
+  const sh = configSheet_();
+  if (!sh) return {};
+  const vals = sh.getDataRange().getValues();
+  const map = {};
+  for (let i = 1; i < vals.length; i++){
+    const key = vals[i][0];
+    if (key) map[key] = vals[i][1];
+  }
+  return map;
+}
+function refreshCfgCache(){ CFG_CACHE = null; }
+function getCfg(clave, def = null){
+  if (CFG_CACHE === null) CFG_CACHE = loadCfg_();
+  return Object.prototype.hasOwnProperty.call(CFG_CACHE, clave) ? CFG_CACHE[clave] : def;
+}
+function getCfgRow_(clave){
+  const sh = configSheet_();
+  if (!sh) return -1;
+  const last = sh.getLastRow();
+  if (last < 2) return -1;
+  const vals = sh.getRange(2,1,last-1,1).getValues();
+  for (let i=0;i<vals.length;i++){
+    if (vals[i][0] === clave) return i+2;
+  }
+  return -1;
+}
+function setCfg_(clave, valor){
+  const sh = configSheet_();
+  if (!sh) return;
+  const row = getCfgRow_(clave);
+  if (row>0){ sh.getRange(row,2).setValue(valor); }
+  else {
+    const lr = sh.getLastRow();
+    sh.getRange(lr+1,1,1,3).setValues([[clave,valor,""]]);
+  }
+  if (CFG_CACHE) CFG_CACHE[clave] = valor;
+}
 function getPlantilla(cod){ const sh=SpreadsheetApp.getActive().getSheetByName("Plantillas"); const v=sh.getRange(2,1,Math.max(0,sh.getLastRow()-1),3).getValues(); for(let r of v){ if(r[0]===cod) return {asunto:r[1], html:r[2]}; } return {asunto:"Aviso", html:"<p>Contenido</p>"}; }
 function render(tpl,ctx){ return tpl.replace(/{{(\w+)}}/g,(_,k)=> ctx[k]!==undefined? ctx[k]: ""); }
 function exportSheetAsPdfBlob_(ss, sheet){
@@ -623,7 +718,15 @@ function exportSheetAsPdfBlob_(ss, sheet){
 function toRfc3339_(date){ return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"); }
 function cleanXmlText_(s){ if(!s) return s; s = s.replace(/^﻿/, ''); const i = s.indexOf('<'); if(i>0) s = s.slice(i); return s; }
 function fechaVencimientoSAT_(){ const pr=periodo_(); const d=new Date(pr.ini); d.setMonth(d.getMonth()+1); d.setDate(17); d.setHours(12,0,0,0); return d; }
-function log(msg){ const sh=SpreadsheetApp.getActive().getSheetByName("Logs"); sh.appendRow([new Date(), String(msg)]); }
+function log(msg){
+  try{
+    const sh = SpreadsheetApp.getActive().getSheetByName("Logs");
+    if (sh) sh.appendRow([new Date(), String(msg)]);
+    else Logger.log(String(msg));
+  }catch(e){
+    Logger.log(String(msg));
+  }
+}
 function attrMap_(el){ const m={}; el.getAttributes().forEach(a=> m[a.getName()]=a.getValue()); return m; }
 function parseDate_(s){ return s? new Date(String(s).replace("T"," ")): new Date(); }
 function toNum(n){ return Number(n||0); }
@@ -851,4 +954,27 @@ function buildKeysSet_(sh){
     vals.forEach(r=>{ const k=keyMovimientoFromRow_(r); if(k) set[k]=true; });
   }
   return set;
+}
+
+/********************  WEB APP & CONFIG API  ********************/
+function doGet(){
+  return HtmlService.createHtmlOutputFromFile('index');
+}
+
+function getPeriodosUI(){
+  const res=[]; const d=new Date(); d.setDate(1);
+  for(let i=0;i<24;i++){
+    const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0');
+    res.push(`${y}-${m}`);
+    d.setMonth(d.getMonth()-1);
+  }
+  return res;
+}
+
+function apiGetConfig(clave){
+  return getCfg(clave);
+}
+function apiSetConfig(clave, valor){
+  setCfg_(clave, valor);
+  return true;
 }
