@@ -29,33 +29,106 @@ const CFG = {
 let CFG_CACHE = null;
 
 /********************  MENÚ UI (SEGURO)  ********************/
-function onOpen(e){ if (!canUseUi_()) return; buildMenu_(); }
+const SHEETS_TO_IGNORE = ["Dashboard", "Config"];
+
+function onOpen(e){
+  if (!canUseUi_()) return;
+  buildMenu_();
+  hideAllSheets_();
+}
+
+/**
+ * Oculta todas las hojas excepto las que están en la lista SHEETS_TO_IGNORE.
+ */
+function hideAllSheets_() {
+  const ss = SpreadsheetApp.getActive();
+  ss.getSheets().forEach(sh => {
+    if (SHEETS_TO_IGNORE.indexOf(sh.getName()) === -1) {
+      sh.hideSheet();
+    }
+  });
+  mostrarDashboard(); // Asegura que el dashboard sea la hoja activa.
+}
+
+/**
+ * Muestra una hoja específica por su nombre.
+ * @param {string} sheetName - El nombre de la hoja a mostrar.
+ */
+function showSheet(sheetName) {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(sheetName);
+  if (sh) {
+    sh.showSheet().activate();
+  } else {
+    safeAlert_(`La hoja "${sheetName}" no existe.`);
+  }
+}
+
 function buildMenu_(){
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu(CFG.NOMBRE_SISTEMA)
-    .addItem("⚙️ Instalar/Actualizar Sistema MX", "setupSistemaMX")
-    .addSeparator()
-    .addItem("📂 Crear carpetas (CFDI/PDFs/Bancos)", "crearCarpetasSistema")
-    .addSeparator()
-    .addItem("⬇️ Importar CFDI Ingresos", "importarCFDIIngresos")
-    .addItem("⬇️ Importar CFDI Egresos", "importarCFDIEgresos")
-    .addItem("🧩 Generar Pólizas", "generarPolizasDesdeMovimientos")
-    .addItem("📐 Recalcular Estados + KPIs", "recalcularEstados")
-    .addItem("🏦 Conciliar Bancos (avanzada)", "conciliarBancariaAvanzada")
-    .addSeparator()
-    .addItem("📅 Abrir Periodo", "abrirPeriodo")
-    .addItem("📕 Cerrar Periodo", "cerrarPeriodo")
-    .addSeparator()
-    .addItem("🧾 Calcular IVA mensual", "calcularIVA_Mensual")
-    .addItem("💸 Calcular ISR PM mensual", "calcularISR_PM_Mensual")
-    .addItem("🧩 Generar DIOT (CSV)", "generarDIOT_CSV")
-    .addSeparator()
-    .addItem("🖨️ PDFs de Estados", "exportarPDFsEstados")
-    .addItem("📧 Enviar Paquete Fiscal", "enviarPaqueteFiscal")
-    .addSeparator()
-    .addItem("🗓️ Programar Recordatorios", "programarRecordatoriosMensuales")
-    .addItem("🗒️ Nota estilo Keep", "generarNotaKeep")
-    .addToUi();
+  const menu = ui.createMenu(CFG.NOMBRE_SISTEMA);
+
+  menu.addItem("🚀 Mostrar Dashboard", "mostrarDashboard");
+  menu.addSeparator();
+
+  const subMenuSetup = ui.createMenu("1. Configuración");
+  subMenuSetup.addItem("⚙️ Instalar/Actualizar Sistema Completo", "setupSistemaMX");
+  subMenuSetup.addItem("📂 Crear Carpetas en Drive", "crearCarpetasSistema");
+  menu.addSubMenu(subMenuSetup);
+
+  const subMenuImport = ui.createMenu("2. Importación");
+  subMenuImport.addItem("⬇️ Importar CFDI Ingresos", "importarCFDIIngresos");
+  subMenuImport.addItem("⬇️ Importar CFDI Egresos", "importarCFDIEgresos");
+  menu.addSubMenu(subMenuImport);
+
+  const subMenuProcess = ui.createMenu("3. Procesamiento");
+  subMenuProcess.addItem("🧩 Generar Pólizas", "generarPolizasDesdeMovimientos");
+  subMenuProcess.addItem("📐 Recalcular Estados + KPIs", "recalcularEstados");
+  subMenuProcess.addItem("🏦 Conciliar Bancos", "conciliarBancariaAvanzada");
+  menu.addSubMenu(subMenuProcess);
+
+  const subMenuReports = ui.createMenu("4. Reportes y Consultas");
+  subMenuReports.addItem("🧾 Calcular IVA Mensual", "calcularIVA_Mensual");
+  subMenuReports.addItem("💸 Calcular ISR PM Mensual", "calcularISR_PM_Mensual");
+  subMenuReports.addItem("🧩 Generar DIOT (CSV)", "generarDIOT_CSV");
+  subMenuReports.addSeparator();
+  subMenuReports.addItem("🖨️ Exportar Estados a PDF", "exportarPDFsEstados");
+  subMenuReports.addItem("📧 Enviar Paquete Fiscal", "enviarPaqueteFiscal");
+  menu.addSubMenu(subMenuReports);
+
+  const subMenuView = ui.createMenu("5. Ver Hojas de Datos");
+  subMenuView.addItem("Ver Ingresos", "showIngresos");
+  subMenuView.addItem("Ver Egresos", "showEgresos");
+  subMenuView.addItem("Ver Pólizas", "showPolizas");
+  subMenuView.addItem("Ver Balanza", "showBalanza");
+  subMenuView.addItem("Ver Estado de Resultados", "showER");
+  subMenuView.addItem("Ver Balance General", "showBG");
+  subMenuView.addSeparator();
+  subMenuView.addItem("Ocultar Hojas", "hideAllSheets_");
+  menu.addSubMenu(subMenuView);
+
+  menu.addToUi();
+}
+
+// Funciones wrapper para los menús
+function showIngresos() { showSheet("Ingresos"); }
+function showEgresos() { showSheet("Egresos"); }
+function showPolizas() { showSheet("Polizas"); }
+function showBalanza() { showSheet("Balanza"); }
+function showER() { showSheet("EstadoResultados"); }
+function showBG() { showSheet("BalanceGeneral"); }
+
+/**
+ * Activa y muestra la hoja del Dashboard.
+ */
+function mostrarDashboard() {
+  const ss = SpreadsheetApp.getActive();
+  const dash = ss.getSheetByName("Dashboard");
+  if (dash) {
+    dash.activate();
+  } else {
+    safeAlert_("El Dashboard no se encuentra. Por favor, ejecute la instalación del sistema.");
+  }
 }
 function canUseUi_(){ try{ SpreadsheetApp.getUi(); return true; }catch(e){ return false; } }
 function safeAlert_(msg){
@@ -233,20 +306,75 @@ function aplicarTemaVisual(){
         .setBorder(true,true,true,true,false,false,PALETA.navy,SpreadsheetApp.BorderStyle.SOLID_THICK);
     try{ sh.setTabColor([PALETA.blue,PALETA.navy,PALETA.camel,PALETA.choc][i%4]); }catch(e){}
   });
-  const dash = ss.getSheetByName("Dashboard"); dash.clear();
-  dash.getRange("A1").setValue("SISTEMA CONTABLE MX — JC").setFontSize(20).setFontWeight("bold");
-  dash.getRange("A2").setValue(`Acentos: Blue ${PALETA.blue} · Choc ${PALETA.choc} · Camel ${PALETA.camel} · Navy ${PALETA.navy}`).setFontColor(PALETA.navy);
+
+  // Rediseño del Dashboard
+  const dash = ss.getSheetByName("Dashboard");
+  dash.clear();
+  dash.getRange("A1:F10").clear(); // Limpia un área más grande
+
+  // Título y Periodo
+  dash.getRange("A1").setValue(CFG.NOMBRE_SISTEMA).setFontSize(18).setFontWeight("bold").setFontColor(PALETA.navy);
+  dash.getRange("A2").setValue("Periodo Activo:");
+  dash.getRange("B2").setFormula("=Config!B14"); // Vincula al periodo en Config
+
+  // Sección de KPIs
+  dash.getRange("D1").setValue("KPIs Financieros").setFontWeight("bold");
+  dash.getRange("D2:E5").setValues([
+    ["Margen Neto", "=KPIs!B2"],
+    ["Liquidez", "=KPIs!B3"],
+    ["Caja", "=KPIs!B7"],
+    ["Runway (meses)", "=KPIs!B9"]
+  ]);
+
+  // Secciones de Acciones (placeholders, los botones se agregarán después)
+  dash.getRange("A4").setValue("1. Configuración e Importación").setFontWeight("bold");
+  dash.getRange("A5").setValue("· Instalar / Actualizar Sistema");
+  dash.getRange("A6").setValue("· Importar CFDI Ingresos");
+  dash.getRange("A7").setValue("· Importar CFDI Egresos");
+
+  dash.getRange("C4").setValue("2. Procesamiento").setFontWeight("bold");
+  dash.getRange("C5").setValue("· Generar Pólizas");
+  dash.getRange("C6").setValue("· Recalcular Estados Financieros");
+
+  dash.getRange("E4").setValue("3. Reportes y Consultas").setFontWeight("bold");
+  dash.getRange("E5").setValue("· Ver Balanza de Comprobación");
+  dash.getRange("E6").setValue("· Ver Estado de Resultados");
+  dash.getRange("E7").setValue("· Ver Balance General");
+
+  // Formato
+  dash.getRange("A1:F1").merge().setHorizontalAlignment("center");
+  dash.getRange("A4:B4, C4:D4, E4:F4").merge();
+  dash.getRange("A1:F10").setFontFamily("Arial");
+  dash.getRange("A4,C4,E4,D1").setFontColor(PALETA.choc);
+  dash.getRange("D2:E5").setBorder(true, true, true, true, true, true);
+  dash.autoResizeColumns(1, 6);
 }
 
 /********************  IMPORTACIÓN DE CFDI (XML)  ********************/
+/**
+ * Funciones wrapper para iniciar la importación de CFDI de ingresos o egresos.
+ * Toman el ID de la carpeta de Google Drive desde la hoja de Configuración.
+ */
 function importarCFDIIngresos(){ importarCFDI_(getCfg("CARPETA_CFDI_ING_ID"), true); }
 function importarCFDIEgresos(){ importarCFDI_(getCfg("CARPETA_CFDI_EGR_ID"), false); }
 
+/**
+ * Lógica principal de importación de CFDI.
+ * Procesa todos los archivos XML de una carpeta de Drive, extrae los datos,
+ * evita duplicados y los inserta en las hojas 'Ingresos' o 'Egresos'.
+ * @param {string} folderId - El ID de la carpeta de Google Drive que contiene los XML.
+ * @param {boolean} esIngreso - True si son CFDI de ingresos, false si son de egresos.
+ */
 function importarCFDI_(folderId, esIngreso){
   if (!folderId) throw new Error("Config: CARPETA_CFDI_* no definida");
+
+  // Obtiene el periodo de trabajo actual para filtrar facturas
   const pr = periodo_();
   const fol = DriveApp.getFolderById(folderId);
+
+  // Recolecta todos los archivos XML, incluso dentro de zips y subcarpetas.
   const fuentes = recolectarXMLs_(fol);
+  // Obtiene un mapa de UUIDs ya existentes para evitar duplicados.
   const ya = uuidsExistentes_();
   const rowsI = [], rowsE = [];
   let totFuentes=0, ok=0, dup=0, err=0, fuera=0, ruteoI=0, ruteoE=0;
@@ -257,26 +385,34 @@ function importarCFDI_(folderId, esIngreso){
       let xml;
       try{ xml = XmlService.parse(cleanXmlText_(src.getText('UTF-8'))); }
       catch(e1){ xml = XmlService.parse(cleanXmlText_(src.getText())); }
+      // Parsea el contenido del archivo XML.
       const root = xml.getRootElement();
-      const A = attrMap_(root);
+      const A = attrMap_(root); // Convierte atributos del nodo raíz a un objeto.
 
+      // Extrae datos primarios del CFDI. Si la fecha está fuera del periodo, lo ignora.
       const Fecha = parseDate_(A.Fecha||A.fecha); if(!(Fecha>=pr.ini && Fecha<=pr.fin)){ fuera++; return; }
       const Folio = A.Folio||A.folio||""; const Serie=A.Serie||A.serie||"";
       const Subtotal = toNum(A.SubTotal||A.Subtotal); const Total = toNum(A.Total);
       const Tipo = (A.TipoDeComprobante||A.Tipo||"").toString().toUpperCase();
       const Moneda = A.Moneda||"MXN"; const Metodo=A.MetodoPago||""; const Forma=A.FormaPago||"";
 
+      // Recorre los nodos descendientes para encontrar datos clave como Emisor, Receptor y Timbre Fiscal (UUID).
       let UUID="", Emisor={}, Receptor={}, uso=""; let rels=[];
       const desc=root.getDescendants();
       for (let n of desc){ const el=n.asElement&&n.asElement(); if(!el) continue; const nm=el.getName();
         if(/^Emisor$/i.test(nm)) Emisor=attrMap_(el);
         else if(/^Receptor$/i.test(nm)) { Receptor=attrMap_(el); uso = Receptor.UsoCFDI || uso; }
-        else if(/TimbreFiscalDigital/i.test(nm)) { const a=attrMap_(el); if(a.UUID) UUID=a.UUID; }
+        else if(/TimbreFiscalDigital/i.test(nm)) { const a=attrMap_(el); if(a.UUID) UUID=a.UUID; } // El UUID es el identificador único de la factura.
         else if(/CfdiRelacionado/i.test(nm)) { const a=attrMap_(el); if(a.UUID) rels.push(a.UUID); }
         else if(/DoctoRelacionado/i.test(nm)) { const a=attrMap_(el); if(a.IdDocumento) rels.push(a.IdDocumento); }
       }
 
-      const key=(UUID||"").trim(); if(key && ya[key]){ dup++; return; }
+      const key=(UUID||"").trim();
+      if(key && ya[key]){
+        dup++;
+        log(`UUID duplicado omitido: ${key}`);
+        return;
+      }
       const tasa = detectarTasaDesdeImpuestos_(root);
       const ivaCalc = round2(Total - Subtotal);
       const origen = esIngreso? 'Emitidas':'Recibidas';
@@ -305,10 +441,15 @@ function importarCFDI_(folderId, esIngreso){
   log(`Importación CFDI — fuentes:${totFuentes} ok:${ok} dup:${dup} err:${err} fuera:${fuera} → I:${ruteoI} E:${ruteoE}`);
 }
 
-// Recorre carpeta y subcarpetas. Devuelve arreglo de {name, getText()}
+/**
+ * Recorre una carpeta de Drive y sus subcarpetas de forma recursiva.
+ * Extrae todos los archivos .xml, incluso si están dentro de archivos .zip.
+ * @param {Folder} folder - El objeto Folder de DriveApp a procesar.
+ * @returns {Array<Object>} Un arreglo de objetos, donde cada objeto representa un archivo XML y tiene las propiedades {name, getText}.
+ */
 function recolectarXMLs_(folder){
   const out = [];
-  const MAX_ZIP_MB = 50;
+  const MAX_ZIP_MB = 50; // Límite para evitar procesar archivos ZIP demasiado grandes.
   const crawl = (fol) => {
     const files = fol.getFiles();
     while (files.hasNext()){
@@ -334,7 +475,12 @@ function recolectarXMLs_(folder){
   return out;
 }
 
-// Si es atajo de Drive, devuelve el archivo real (requiere Servicio Avanzado de Drive habilitado)
+/**
+ * Si el archivo es un atajo de Google Drive, devuelve el archivo real al que apunta.
+ * Requiere que el servicio avanzado de Drive API esté habilitado en el proyecto.
+ * @param {File} file - El objeto File de DriveApp.
+ * @returns {File} El archivo original o el archivo apuntado por el atajo.
+ */
 function resolveShortcutFile_(file){
   const MIME_SHORTCUT = 'application/vnd.google-apps.shortcut';
   try{
@@ -346,7 +492,11 @@ function resolveShortcutFile_(file){
   return file;
 }
 
-// Conjunto de UUID ya cargados en Ingresos/Egresos para evitar duplicados
+/**
+ * Lee las hojas de Ingresos y Egresos para crear un conjunto (Set) de todos los UUIDs
+ * que ya han sido importados. Esto es crucial para evitar duplicar facturas.
+ * @returns {Object} Un objeto que funciona como un Set, con los UUIDs como claves.
+ */
 function uuidsExistentes_(){
   const ss = SpreadsheetApp.getActive();
   const set = {};
@@ -357,23 +507,54 @@ function uuidsExistentes_(){
   return set;
 }
 
+/**
+ * Intenta detectar la tasa de IVA (16% u 8%) analizando los nodos de impuestos del XML.
+ * Busca un impuesto de tipo "Traslado" con código "002" (IVA).
+ * @param {Element} root - El elemento raíz del documento XML.
+ * @returns {number} La tasa de IVA detectada (0.16, 0.08, o 0.00).
+ */
 function detectarTasaDesdeImpuestos_(root){
   const d = root.getDescendants();
   for (let n of d){ try{ const el=n.asElement(); if(!el) continue; if(/Traslado/i.test(el.getName())){ const a=attrMap_(el); if(a.Impuesto=="002"&&a.TasaOCuota){ const t=parseFloat(a.TasaOCuota); return t>=0.15?0.16:(t>=0.07?0.08:0); } } }catch(e){} }
-  return 0.16;
+  return 0.16; // Devuelve 16% por defecto si no se encuentra.
 }
 
 /********************  MOTOR DE PÓLIZAS (MX)  ********************/
+/**
+ * Orquesta la generación de pólizas contables.
+ * Lee los movimientos de las hojas 'Ingresos' y 'Egresos' y llama a la función
+ * que procesa cada una. Finalmente, recalcula los estados financieros.
+ */
 function generarPolizasDesdeMovimientos(){
-  const ss=SpreadsheetApp.getActive(); const shI=ss.getSheetByName("Ingresos"); const shE=ss.getSheetByName("Egresos"); const p=ss.getSheetByName("Polizas");
+  const ss=SpreadsheetApp.getActive();
+  const shI=ss.getSheetByName("Ingresos");
+  const shE=ss.getSheetByName("Egresos");
+  const p=ss.getSheetByName("Polizas");
+
+  // Limpia la hoja de Pólizas (excepto el encabezado) para evitar duplicados.
+  const lr = p.getLastRow();
+  if (lr > 1) {
+    p.getRange(2, 1, lr - 1, p.getLastColumn()).clearContent();
+  }
+
+  log("Hoja de Pólizas limpiada. Generando nuevas pólizas...");
+
   if (shI.getLastRow()>1) procesarMovimientosMX(shI,p,true);
   if (shE.getLastRow()>1) procesarMovimientosMX(shE,p,false);
   recalcularEstados();
+  safeAlert_("Pólizas generadas y estados financieros actualizados.");
 }
 
+/**
+ * Procesa una hoja de movimientos (Ingresos o Egresos) y genera los asientos
+ * contables correspondientes en la hoja 'Polizas'.
+ * @param {Sheet} shMov - La hoja de Ingresos o Egresos.
+ * @param {Sheet} shPol - La hoja de Pólizas donde se escribirán los asientos.
+ * @param {boolean} esIngreso - True si se está procesando la hoja de Ingresos.
+ */
 function procesarMovimientosMX(shMov, shPol, esIngreso){
   const values = shMov.getRange(2,1,Math.max(0, shMov.getLastRow()-1), shMov.getLastColumn()).getValues();
-  const out=[];
+  const out=[]; // Arreglo para almacenar las filas de las nuevas pólizas.
   values.forEach(r=>{
     const [fecha, folio, tercero, rfc, concepto, tasaLabel, subtotal0, iva0, ret0, total0, , , , uuid] = r;
     if(!fecha||!total0) return;
@@ -387,26 +568,39 @@ function procesarMovimientosMX(shMov, shPol, esIngreso){
     const tasa = (String(tasaLabel)==="8"?0.08:(String(tasaLabel)==="0"?0:0.16));
     const ref = `${esIngreso?"I":"E"}-${folio||uuid||Utilities.getUuid().slice(0,8)}`;
 
-    const ctaTercero = esIngreso? "120-000" : "210-100";
-    const ctaIngreso = "400-000";
-    const ctaGasto   = (/honorario/i.test(String(concepto))?"520-000":"510-000");
-    const ctaIvaTras = (tasa===0.08?"240-210":"240-200");
-    const ctaIvaAcred= (tasa===0.08?"240-310":"240-300");
+    // Asignación de cuentas contables según el catálogo predefinido.
+    const ctaTercero = esIngreso? "120-000" : "210-100"; // Clientes o Proveedores
+    const ctaIngreso = "400-000"; // Cuenta de Ingresos
+    const ctaGasto   = (/honorario/i.test(String(concepto))?"520-000":"510-000"); // Gasto general o por honorarios
+    const ctaIvaTras = (tasa===0.08?"240-210":"240-200"); // IVA Trasladado (cobrado)
+    const ctaIvaAcred= (tasa===0.08?"240-310":"240-300"); // IVA Acreditable (pagado)
 
+    // Genera los asientos de la póliza según si es ingreso o egreso.
+    // Genera los asientos de la póliza según si es ingreso o egreso.
     if (esIngreso){
-      out.push([fecha,"Ingreso",ref,ctaTercero,"Clientes",`Cobro ${concepto}`,0,total,uuid,"Ingresos","",""]);
-      out.push([fecha,"Ingreso",ref,ctaIngreso,"Ingresos",`Venta ${concepto}`,subtotal||0,0,uuid,"Ingresos","",""]);
-      if (tasa>0) out.push([fecha,"Ingreso",ref,ctaIvaTras,"IVA Trasladado",`IVA ${tasa*100}%`,iva||tasa*(subtotal||0),0,uuid,"Ingresos","",""]);
-      if (ret>0) out.push([fecha,"Ingreso",ref,"240-400","ISR Retenido","Retención ISR",0,ret,uuid,"Ingresos","",""]);
+      // Asiento de Ingreso:
+      // Cargo (Debe) a Clientes por el total.
+      // Abono (Haber) a Ingresos por el subtotal.
+      // Abono (Haber) a IVA Trasladado por el IVA.
+      // Cargo (Debe) a ISR Retenido si aplica (es un activo).
+      out.push([fecha,"Ingreso",ref,ctaTercero,"Clientes",`Cobro ${concepto}`,total,0,uuid,"Ingresos","",""]); // DEBE
+      out.push([fecha,"Ingreso",ref,ctaIngreso,"Ingresos",`Venta ${concepto}`,0,subtotal||0,uuid,"Ingresos","",""]); // HABER
+      if (tasa>0) out.push([fecha,"Ingreso",ref,ctaIvaTras,"IVA Trasladado",`IVA ${tasa*100}%`,0,iva||tasa*(subtotal||0),uuid,"Ingresos","",""]); // HABER
+      if (ret>0) out.push([fecha,"Ingreso",ref,"240-400","ISR Retenido","Retención ISR",ret,0,uuid,"Ingresos","",""]); // DEBE
     } else {
+      // Asiento de Egreso:
+      // Cargo (Debe) a Gastos por el subtotal.
+      // Cargo (Debe) a IVA Acreditable por el IVA.
+      // Abono (Haber) a Proveedores por el total.
+      // Abono (Haber) a Retenciones si aplican.
       const prov = buscarProveedorPorRFC_(rfc); const retCfg = calcRetenciones_(prov, Math.abs(subtotal)||0, tasa);
       const isrR = ret>0? Number(ret): retCfg.isr; const ivaR = retCfg.iva;
       const ivaMonto = iva||tasa*(subtotal||0);
-      out.push([fecha,"Egreso",ref,ctaGasto,"Gasto",`Gasto ${concepto}`,0,Math.abs(subtotal)||0,uuid,"Egresos","",""]);
-      if (tasa>0) out.push([fecha,"Egreso",ref,ctaIvaAcred,"IVA Acreditable",`IVA ${tasa*100}%`,0,Math.abs(ivaMonto),uuid,"Egresos","",""]);
-      if (isrR>0) out.push([fecha,"Egreso",ref,"240-400","ISR Retenido","Ret ISR a PF",isrR,0,uuid,"Egresos","",""]);
-      if (ivaR>0) out.push([fecha,"Egreso",ref,"240-300","IVA Retenido","Ret IVA a PF",ivaR,0,uuid,"Egresos","",""]);
-      out.push([fecha,"Egreso",ref,ctaTercero,"Proveedores",`Pago a ${tercero}`,Math.abs(total),0,uuid,"Egresos","",""]);
+      out.push([fecha,"Egreso",ref,ctaGasto,"Gasto",`Gasto ${concepto}`,Math.abs(subtotal)||0,0,uuid,"Egresos","",""]); // DEBE
+      if (tasa>0) out.push([fecha,"Egreso",ref,ctaIvaAcred,"IVA Acreditable",`IVA ${tasa*100}%`,Math.abs(ivaMonto),0,uuid,"Egresos","",""]); // DEBE
+      if (isrR>0) out.push([fecha,"Egreso",ref,"240-400","ISR Retenido","Ret ISR a PF",0,isrR,uuid,"Egresos","",""]); // HABER
+      if (ivaR>0) out.push([fecha,"Egreso",ref,"240-300","IVA Retenido","Ret IVA a PF",0,ivaR,uuid,"Egresos","",""]); // HABER
+      out.push([fecha,"Egreso",ref,ctaTercero,"Proveedores",`Pago a ${tercero}`,0,Math.abs(total),uuid,"Egresos","",""]); // HABER
     }
   });
   if (out.length) shPol.getRange(shPol.getLastRow()+1,1,out.length,12).setValues(out);
@@ -430,36 +624,58 @@ function calcRetenciones_(prov, subtotal, tasa){
 }
 
 /********************  MAYOR, BALANZA, ESTADOS, KPIs  ********************/
+/**
+ * Orquesta el recálculo de todos los reportes financieros.
+ * Limpia las hojas de reportes y las vuelve a generar desde la hoja 'Polizas'.
+ * 1. Genera el Libro Mayor.
+ * 2. Genera la Balanza de Comprobación.
+ * 3. Genera el Estado de Resultados.
+ * 4. Genera el Balance General.
+ * 5. Calcula los KPIs financieros.
+ */
 function recalcularEstados(){
   const ss=SpreadsheetApp.getActive(); const p=ss.getSheetByName("Polizas"); const mayor=ss.getSheetByName("Mayor"); const bal=ss.getSheetByName("Balanza"); const er=ss.getSheetByName("EstadoResultados"); const bg=ss.getSheetByName("BalanceGeneral"); const kpi=ss.getSheetByName("KPIs"); const cat=ss.getSheetByName("CatCuentas");
+
+  // 1. Generar Libro Mayor y calcular saldos por cuenta
   mayor.getRange(2,1,mayor.getLastRow(), mayor.getLastColumn()).clearContent();
   const pols=p.getRange(2,1,Math.max(0,p.getLastRow()-1),12).getValues();
-  const mrows=[]; const saldos={};
+  const mrows=[]; const saldos={}; // 'saldos' acumulará el total de debe/haber por cuenta.
   pols.forEach(r=>{ const [fecha,,ref,cta,,desc,debe,haber]=[r[0],r[1],r[2],r[3],r[4],r[5],Number(r[6]||0),Number(r[7]||0)]; if(!cta) return; if(!saldos[cta]) saldos[cta]={debe:0,haber:0}; saldos[cta].debe+=debe; saldos[cta].haber+=haber; const saldo=saldos[cta].debe - saldos[cta].haber; mrows.push([cta,fecha,ref,desc,debe,haber,saldo]); });
   if (mrows.length) mayor.getRange(2,1,mrows.length,7).setValues(mrows);
 
+  // 2. Generar Balanza de Comprobación
   bal.getRange(2,1,bal.getLastRow(), bal.getLastColumn()).clearContent();
-  const nombres = mapearNombreCuenta_(cat);
+  const nombres = mapearNombreCuenta_(cat); // Mapea códigos de cuenta a nombres.
   const brows = Object.keys(saldos).map(cta=>[cta, nombres[cta]||"", saldos[cta].debe, saldos[cta].haber, saldos[cta].debe - saldos[cta].haber]);
   if (brows.length) bal.getRange(2,1,brows.length,5).setValues(brows);
 
+  // 3. Generar Estado de Resultados
   er.getRange(2,1,er.getLastRow(), er.getLastColumn()).clearContent();
   bg.getRange(2,1,bg.getLastRow(), bg.getLastColumn()).clearContent();
   const sumPref=(pref,neg)=> brows.filter(r=> String(r[0]).startsWith(pref)).reduce((a,b)=> a + Number(b[4]||0), 0)*(neg?-1:1);
-  const ingresos = sumPref("400-", true)*-1;
+  const ingresos = sumPref("400-", true)*-1; // Ingresos (naturaleza acreedora, se multiplica por -1 para mostrar positivo)
   const costos   = Math.abs(sumPref("500-", false));
   const gastos   = Math.abs(sumPref("510-", false));
   const utilidad = ingresos - costos - gastos;
   er.getRange(2,1,4,3).setValues([["Ingresos","400-***", ingresos],["Costos","500-***", -costos],["Gastos","510-***", -gastos],["Utilidad","—", utilidad]]);
+
+  // 4. Generar Balance General
   const activo  = brows.filter(r=> String(r[0]).startsWith("1")).reduce((a,b)=> a+Number(b[4]||0),0);
   const pasivo  = brows.filter(r=> String(r[0]).startsWith("2")).reduce((a,b)=> a+Number(b[4]||0),0);
-  const capital = brows.filter(r=> String(r[0]).startsWith("3")).reduce((a,b)=> a+Number(b[4]||0),0) + utilidad;
+  const capital = brows.filter(r=> String(r[0]).startsWith("3")).reduce((a,b)=> a+Number(b[4]||0),0) + utilidad; // El capital incluye la utilidad del ejercicio.
   bg.getRange(2,1,3,3).setValues([["Activo","1xx", activo],["Pasivo","2xx", pasivo],["Capital","3xx+U", capital]]);
 
+  // 5. Calcular KPIs
   kpi.getRange(2,1,kpi.getLastRow(),2).clearContent();
-  const caja = saldoPorCuenta_(brows,"110-110");
-  const liquidez = pasivo? caja/pasivo : 0; const acida = (caja + saldoPorCuenta_(brows,"120-000"))/Math.max(1,pasivo); const margen = ingresos? utilidad/ingresos:0; const roa = activo? utilidad/activo:0; const roe = capital? utilidad/capital:0; const gastosMens = gastos; const runway = gastosMens? caja/gastosMens:0;
-  const ks = [["Margen Neto", round2(margen)],["Liquidez", round2(liquidez)],["Prueba Ácida", round2(acida)],["ROA", round2(roa)],["ROE", round2(roe)],["Caja", round2(caja)],["Gastos Mensuales", round2(gastosMens)],["Runway (meses)", round2(runway)]];
+  const caja = saldoPorCuenta_(brows,"110-110"); // Saldo de la cuenta de caja/bancos.
+  const liquidez = pasivo? caja/pasivo : 0;
+  const acida = (caja + saldoPorCuenta_(brows,"120-000"))/Math.max(1,pasivo); // Prueba ácida = (Activo Corriente - Inventario) / Pasivo Corriente
+  const margen = ingresos? utilidad/ingresos:0; // Margen de utilidad neta
+  const roa = activo? utilidad/activo:0; // Retorno sobre activos
+  const roe = capital? utilidad/capital:0; // Retorno sobre capital
+  const gastosMens = gastos;
+  const runway = gastosMens? caja/gastosMens:0; // Meses de "supervivencia" si no hay ingresos.
+  const ks = [["Margen Neto", round2(margen)],["Liquidez", round2(liquidez)],["Prueba Ácida", round2(acida)],["ROA", round2(roa)],["ROE", round2(roe)],["Caja", round2(caja)],["Gastros Mensuales", round2(gastosMens)],["Runway (meses)", round2(runway)]];
   kpi.getRange(2,1,ks.length,2).setValues(ks);
 }
 
@@ -956,25 +1172,3 @@ function buildKeysSet_(sh){
   return set;
 }
 
-/********************  WEB APP & CONFIG API  ********************/
-function doGet(){
-  return HtmlService.createHtmlOutputFromFile('index');
-}
-
-function getPeriodosUI(){
-  const res=[]; const d=new Date(); d.setDate(1);
-  for(let i=0;i<24;i++){
-    const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0');
-    res.push(`${y}-${m}`);
-    d.setMonth(d.getMonth()-1);
-  }
-  return res;
-}
-
-function apiGetConfig(clave){
-  return getCfg(clave);
-}
-function apiSetConfig(clave, valor){
-  setCfg_(clave, valor);
-  return true;
-}
