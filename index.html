@@ -28,6 +28,39 @@
     function savePeriodo(sel){
       google.script.run.withSuccessHandler(()=>toast('Periodo guardado')).apiSetConfig('PERIODO_LABEL', sel.value);
     }
+    function importarCSV(){
+      const filename = document.getElementById('csv-filename').value;
+      if (!filename) {
+        toast('Por favor, ingrese un nombre de archivo.');
+        return;
+      }
+      toast('Importando: ' + filename + '...');
+      google.script.run
+        .withSuccessHandler(result => toast(result))
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        .importarEstadoDeCuentaCsv(filename);
+    }
+    function runAutoReconciliation() {
+      toast('Ejecutando conciliación automática...');
+      google.script.run
+        .withSuccessHandler(result => toast(result))
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        .conciliarBancariaAvanzadaUI();
+    }
+    function runImport(functionName) {
+      toast('Iniciando importación...');
+      google.script.run
+        .withSuccessHandler(result => toast(result))
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        [functionName]();
+    }
+    function runProcess(functionName) {
+      toast('Procesando...');
+      google.script.run
+        .withSuccessHandler(result => toast(result))
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        [functionName]();
+    }
     function init(){
       google.script.run.withSuccessHandler(ps=>{
         const sel=document.getElementById('periodo');
@@ -42,6 +75,7 @@
   <a href="#" onclick="showSection('setup')">Setup</a>
   <a href="#" onclick="showSection('importar')">Importar</a>
   <a href="#" onclick="showSection('conta')">Contabilizar</a>
+  <a href="#" onclick="showSection('conciliacion')">Conciliación</a>
   <a href="#" onclick="showSection('imp')">Impuestos</a>
   <a href="#" onclick="showSection('entrega')">Entrega</a>
   <a href="#" onclick="showSection('tablas')">Tablas</a>
@@ -52,11 +86,61 @@
     <label>Periodo:</label>
     <select id="periodo" onchange="savePeriodo(this)"></select>
   </section>
-  <section id="importar"><h2>Importar</h2></section>
-  <section id="conta"><h2>Contabilizar</h2></section>
-  <section id="imp"><h2>Impuestos</h2></section>
-  <section id="entrega"><h2>Entrega</h2></section>
-  <section id="tablas"><h2>Tablas</h2></section>
+
+  <section id="importar">
+    <h2>Importación de Datos</h2>
+    <p>Importe los archivos XML de CFDI desde su carpeta de Google Drive.</p>
+    <button onclick="runImport('importarCFDIIngresosUI')">⬇️ Importar CFDI Ingresos</button>
+    <br/><br/>
+    <button onclick="runImport('importarCFDIEgresosUI')">⬇️ Importar CFDI Egresos</button>
+  </section>
+
+  <section id="conta">
+    <h2>Procesamiento Contable</h2>
+    <button onclick="runProcess('generarPolizasDesdeMovimientosUI')">🧩 Generar Pólizas</button>
+    <br/><br/>
+    <button onclick="runProcess('recalcularEstadosUI')">📐 Recalcular Estados Financieros</button>
+  </section>
+
+  <section id="conciliacion">
+    <h2>Conciliación Bancaria</h2>
+    <p>Suba su estado de cuenta en formato CSV a su carpeta de Drive y escriba el nombre del archivo aquí.</p>
+    <label for="csv-filename">Nombre del archivo:</label>
+    <input type="text" id="csv-filename" placeholder="estado_de_cuenta.csv" style="width: 200px;"/>
+    <button onclick="importarCSV()">1. Importar CSV</button>
+    <hr style="margin: 20px 0;"/>
+    <p>Una vez importado, ejecute la conciliación automática para encontrar coincidencias.</p>
+    <button onclick="runAutoReconciliation()">2. Ejecutar Conciliación Automática</button>
+  </section>
+
+  <section id="imp">
+    <h2>Cálculo de Impuestos</h2>
+    <button onclick="runProcess('calcularIVA_MensualUI')">🧾 Calcular IVA Mensual</button>
+    <br/><br/>
+    <button onclick="runProcess('calcularISR_MensualUI')">💸 Calcular ISR Mensual</button>
+  </section>
+
+  <section id="entrega">
+    <h2>Reportes y Entregables</h2>
+    <button onclick="google.script.run.verReporteCliente()">📊 Ver Reporte para Cliente</button>
+    <br/><br/>
+    <button onclick="runProcess('generarGuionReunion')">📝 Generar Guión de Reunión</button>
+    <br/><br/>
+    <button onclick="runProcess('exportarPDFsEstadosUI')">🖨️ Exportar Estados a PDF</button>
+    <br/><br/>
+    <button onclick="runProcess('enviarPaqueteFiscalUI')">📧 Enviar Paquete Fiscal</button>
+  </section>
+
+  <section id="tablas">
+    <h2>Ver Hojas de Datos</h2>
+    <button onclick="google.script.run.showIngresos()">Ver Ingresos</button>
+    <button onclick="google.script.run.showEgresos()">Ver Egresos</button>
+    <button onclick="google.script.run.showPolizas()">Ver Pólizas</button>
+    <br/><br/>
+    <button onclick="google.script.run.showBalanza()">Ver Balanza</button>
+    <button onclick="google.script.run.showER()">Ver E. Resultados</button>
+    <button onclick="google.script.run.showBG()">Ver B. General</button>
+  </section>
 </main>
 <div id="toast"></div>
 </body>

@@ -84,13 +84,17 @@ function buildMenu_(){
   const subMenuProcess = ui.createMenu("3. Procesamiento");
   subMenuProcess.addItem("🧩 Generar Pólizas de Nuevas Transacciones", "generarPolizasDesdeMovimientos");
   subMenuProcess.addItem("📐 Recalcular Estados + KPIs", "recalcularEstados");
-  subMenuProcess.addItem("🏦 Conciliar Bancos", "conciliarBancariaAvanzada");
+  subMenuProcess.addSeparator();
+  subMenuProcess.addItem("🏦 Conciliar Bancos (Automático)", "conciliarBancariaAvanzada");
   menu.addSubMenu(subMenuProcess);
 
   const subMenuReports = ui.createMenu("4. Reportes y Consultas");
   subMenuReports.addItem("🧾 Calcular IVA Mensual", "calcularIVA_Mensual");
-  subMenuReports.addItem("💸 Calcular ISR PM Mensual", "calcularISR_PM_Mensual");
+  subMenuReports.addItem("💸 Calcular ISR Mensual", "calcularISR_Mensual");
   subMenuReports.addItem("🧩 Generar DIOT (CSV)", "generarDIOT_CSV");
+  subMenuReports.addSeparator();
+  subMenuReports.addItem("📊 Ver Reporte para Cliente", "verReporteCliente");
+  subMenuReports.addItem("📝 Generar Guión de Reunión", "generarGuionReunion");
   subMenuReports.addSeparator();
   subMenuReports.addItem("🖨️ Exportar Estados a PDF", "exportarPDFsEstados");
   subMenuReports.addItem("📧 Enviar Paquete Fiscal", "enviarPaqueteFiscal");
@@ -159,7 +163,7 @@ function setupSistemaMX(){
   const ss = SpreadsheetApp.getActive();
   const hojas = [
     "Config","Clientes","Proveedores","CatCuentas","Ingresos","Egresos","Bancos",
-    "Polizas","Mayor","Balanza","EstadoResultados","BalanceGeneral","KPIs",
+    "Polizas","Mayor","Balanza","EstadoResultados","BalanceGeneral","KPIs","AnalisisFinanciero",
     "Plantillas","PagosImpuestos","DIOT","Logs","Dashboard", "Asientos"
   ];
   hojas.forEach(h => getOrCreateSheet(ss,h));
@@ -171,6 +175,7 @@ function setupSistemaMX(){
   prepararBancos();
   prepararPolizasMayor();
   prepararEstadosPlantillas();
+  prepararAnalisisFinanciero();
   prepararPeriodos();
   importarReglasDeAsientos();
   aplicarTemaVisual();
@@ -220,6 +225,7 @@ function prepararConfig(){
     ["CORREOS_DESTINO", CFG.CORREOS_DESTINO, "Separados por coma"],
     ["LISTA_TASKS", CFG.LISTA_TASKS, "Lista de Tasks"],
     ["CALENDARIO_NOMBRE", CFG.CALENDARIO_NOMBRE, "Calendario de obligaciones"],
+    ["REGIMEN_FISCAL", "PM_General", "Ej: PM_General, RESICO, PFAE"],
     ["IVA_16", CFG.IVA_TASAS["16"], "Tasa general"],
     ["IVA_8", CFG.IVA_TASAS["8"], "Frontera"],
     ["ISR_PM_TASA", CFG.ISR_PM_TASA, "Tasa PM"],
@@ -301,6 +307,42 @@ function prepararEstadosPlantillas(){
   ]);
   const pagos = SpreadsheetApp.getActive().getSheetByName("PagosImpuestos"); pagos.clear(); pagos.getRange(1,1,1,7).setValues([["Periodo","Impuesto","Base","Tasa","Importe","Fecha Pago","Acuse URL"]]).setFontWeight("bold");
   const diot = SpreadsheetApp.getActive().getSheetByName("DIOT"); diot.clear(); diot.getRange(1,1,1,8).setValues([["RFC","Proveedor","Tipo","Base 16%","IVA 16%","Base 8%","IVA 8%","Exento"]]).setFontWeight("bold");
+}
+
+function prepararAnalisisFinanciero() {
+  const sh = SpreadsheetApp.getActive().getSheetByName("AnalisisFinanciero");
+  sh.clear();
+  sh.getRange("A1:D1").setValues([["Grupo", "Indicador", "Valor", "Interpretación"]]).setFontWeight("bold");
+
+  const data = [
+    // --- Liquidez ---
+    ["Liquidez", "Razón Circulante", `=IFERROR(KPIs!B8, 0)`, "Mide la capacidad de cubrir deudas a corto plazo. Un valor > 1 es generalmente bueno."],
+    ["Liquidez", "Prueba Ácida", `=IFERROR(KPIs!B9, 0)`, "Similar a la razón circulante, pero excluyendo el inventario, que es menos líquido."],
+    // --- Rentabilidad ---
+    ["Rentabilidad", "Margen Bruto", `=IFERROR(EstadoResultados!C3 / EstadoResultados!C2, 0)`, "Porcentaje de ingresos que queda después de cubrir el costo de ventas."],
+    ["Rentabilidad", "Margen Operativo", `=IFERROR(EstadoResultados!C5 / EstadoResultados!C2, 0)`, "Eficiencia de la operación principal del negocio antes de intereses e impuestos."],
+    ["Rentabilidad", "Margen Neto", `=IFERROR(KPIs!B2, 0)`, "El porcentaje de cada peso de venta que se convierte en ganancia neta."],
+    ["Rentabilidad", "ROA (Return on Assets)", `=IFERROR(KPIs!B3, 0)`, "Qué tan eficientemente se usan los activos para generar ganancias."],
+    ["Rentabilidad", "ROE (Return on Equity)", `=IFERROR(KPIs!B4, 0)`, "Rendimiento generado sobre la inversión de los accionistas."],
+    // --- Actividad / Eficiencia ---
+    ["Eficiencia", "Rotación de Cuentas por Cobrar", `=IFERROR(EstadoResultados!C2 / IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="120")), 0), 0)`, "Cuántas veces la empresa convierte sus cuentas por cobrar en efectivo en un periodo."],
+    ["Eficiencia", "Días de Cartera", `=IFERROR(365 / IFERROR(VLOOKUP("Rotación de Cuentas por Cobrar", B:C, 2, FALSE), 1), "")`, "Número promedio de días que tarda una empresa en cobrar sus ventas a crédito."],
+    ["Eficiencia", "Ciclo de Conversión de Efectivo", "Próximamente", "Días que tarda la empresa en convertir sus inversiones en inventarios y otros recursos en efectivo."],
+    // --- Apalancamiento ---
+    ["Apalancamiento", "Razón de Endeudamiento", `=IFERROR(BalanceGeneral!C3 / BalanceGeneral!C2, 0)`, "Porcentaje de los activos que se financian a través de deuda."],
+    ["Apalancamiento", "Deuda a Capital", `=IFERROR(BalanceGeneral!C3 / (BalanceGeneral!C4+BalanceGeneral!C5), 0)`, "Compara la deuda total con el capital de los accionistas."]
+  ];
+
+  const values = data.map(row => [row[0], row[1], "", row[3]]);
+  const formulas = data.map(row => [row[2]]);
+
+  sh.getRange(2, 1, data.length, 4).setValues(values);
+  sh.getRange(2, 3, formulas.length, 1).setFormulas(formulas);
+
+  sh.getRange("C:C").setNumberFormat("0.00");
+  sh.getRange("B:B").setFontWeight("bold");
+  sh.autoResizeColumns(1, 4);
+  formatSheet_(sh);
 }
 
 function prepararPeriodos(){
@@ -607,36 +649,133 @@ function calcRetenciones_(prov, subtotal, tasa){
 
 /********************  MAYOR, BALANZA, ESTADOS, KPIs  ********************/
 function recalcularEstados(){
-  const ss=SpreadsheetApp.getActive(); const p=ss.getSheetByName("Polizas"); const mayor=ss.getSheetByName("Mayor"); const bal=ss.getSheetByName("Balanza"); const er=ss.getSheetByName("EstadoResultados"); const bg=ss.getSheetByName("BalanceGeneral"); const kpi=ss.getSheetByName("KPIs"); const cat=ss.getSheetByName("CatCuentas");
-  mayor.getRange(2,1,mayor.getLastRow(), mayor.getLastColumn()).clearContent();
-  const pols=p.getRange(2,1,Math.max(0,p.getLastRow()-1),12).getValues();
-  const mrows=[]; const saldos={};
-  pols.forEach(r=>{ const [fecha,,ref,cta,,desc,debe,haber]=[r[0],r[1],r[2],r[3],r[4],r[5],Number(r[6]||0),Number(r[7]||0)]; if(!cta) return; if(!saldos[cta]) saldos[cta]={debe:0,haber:0}; saldos[cta].debe+=debe; saldos[cta].haber+=haber; const saldo=saldos[cta].debe - saldos[cta].haber; mrows.push([cta,fecha,ref,desc,debe,haber,saldo]); });
-  if (mrows.length) mayor.getRange(2,1,mrows.length,7).setValues(mrows);
+  const ss = SpreadsheetApp.getActive();
+  const bal = ss.getSheetByName("Balanza");
+  const er = ss.getSheetByName("EstadoResultados");
+  const bg = ss.getSheetByName("BalanceGeneral");
+  const kpi = ss.getSheetByName("KPIs");
+  const mayor = ss.getSheetByName("Mayor");
+  const p = ss.getSheetByName("Polizas");
 
-  bal.getRange(2,1,bal.getLastRow(), bal.getLastColumn()).clearContent();
-  const nombres = mapearNombreCuenta_(cat);
-  const brows = Object.keys(saldos).map(cta=>[cta, nombres[cta]||"", saldos[cta].debe, saldos[cta].haber, saldos[cta].debe - saldos[cta].haber]);
-  if (brows.length) bal.getRange(2,1,brows.length,5).setValues(brows);
+  // --- Mayor (Ledger) Calculation (Remains code-driven for detailed drill-down) ---
+  const lastMayorRow = mayor.getLastRow();
+  if (lastMayorRow > 1) {
+    mayor.getRange(2, 1, lastMayorRow - 1, mayor.getLastColumn()).clearContent();
+  }
+  const lastPolizaRow = p.getLastRow();
+  if (lastPolizaRow > 1) {
+    const pols = p.getRange(2, 1, lastPolizaRow - 1, 12).getValues();
+    const mrows = [];
+    const saldos = {};
+    pols.forEach(r => {
+      const [fecha, , ref, cta, , desc, debe, haber] = [r[0], r[1], r[2], r[3], r[4], r[5], Number(r[6] || 0), Number(r[7] || 0)];
+      if (!cta) return;
+      if (!saldos[cta]) saldos[cta] = { debe: 0, haber: 0, saldo: 0 };
+      saldos[cta].debe += debe;
+      saldos[cta].haber += haber;
+      saldos[cta].saldo = saldos[cta].debe - saldos[cta].haber;
+      mrows.push([cta, fecha, ref, desc, debe, haber, saldos[cta].saldo]);
+    });
+    if (mrows.length) mayor.getRange(2, 1, mrows.length, 7).setValues(mrows);
+  }
 
-  er.getRange(2,1,er.getLastRow(), er.getLastColumn()).clearContent();
-  bg.getRange(2,1,bg.getLastRow(), bg.getLastColumn()).clearContent();
-  const sumPref=(pref,neg)=> brows.filter(r=> String(r[0]).startsWith(pref)).reduce((a,b)=> a + Number(b[4]||0), 0)*(neg?-1:1);
-  const ingresos = sumPref("400-", true)*-1;
-  const costos   = Math.abs(sumPref("500-", false));
-  const gastos   = Math.abs(sumPref("510-", false));
-  const utilidad = ingresos - costos - gastos;
-  er.getRange(2,1,4,3).setValues([["Ingresos","400-***", ingresos],["Costos","500-***", -costos],["Gastos","510-***", -gastos],["Utilidad","—", utilidad]]);
-  const activo  = brows.filter(r=> String(r[0]).startsWith("1")).reduce((a,b)=> a+Number(b[4]||0),0);
-  const pasivo  = brows.filter(r=> String(r[0]).startsWith("2")).reduce((a,b)=> a+Number(b[4]||0),0);
-  const capital = brows.filter(r=> String(r[0]).startsWith("3")).reduce((a,b)=> a+Number(b[4]||0),0) + utilidad;
-  bg.getRange(2,1,3,3).setValues([["Activo","1xx", activo],["Pasivo","2xx", pasivo],["Capital","3xx+U", capital]]);
+  // --- Balanza de Comprobación (Trial Balance) with Formulas ---
+  const lastBalanzaRow = bal.getLastRow();
+  if (lastBalanzaRow > 1) {
+    bal.getRange(2, 1, lastBalanzaRow - 1, 5).clearContent();
+  }
+  bal.getRange("A2").setFormula(`=IFERROR(SORT(UNIQUE(FILTER(Polizas!D2:D, Polizas!D2:D<>""))), "")`);
+  bal.getRange("B2").setFormula(`=ARRAYFORMULA(IF(A2:A<>"", IFERROR(VLOOKUP(A2:A, CatCuentas!A:B, 2, FALSE), "Sin nombre"), ""))`);
+  bal.getRange("C2").setFormula(`=ARRAYFORMULA(IF(A2:A<>"", SUMIF(Polizas!D:D, A2:A, Polizas!G:G), ""))`);
+  bal.getRange("D2").setFormula(`=ARRAYFORMULA(IF(A2:A<>"", SUMIF(Polizas!D:D, A2:A, Polizas!H:H), ""))`);
+  bal.getRange("E2").setFormula(`=ARRAYFORMULA(IF(A2:A<>"", N(C2:C)-N(D2:D), ""))`);
 
-  kpi.getRange(2,1,kpi.getLastRow(),2).clearContent();
-  const caja = saldoPorCuenta_(brows,"110-110");
-  const liquidez = pasivo? caja/pasivo : 0; const acida = (caja + saldoPorCuenta_(brows,"120-000"))/Math.max(1,pasivo); const margen = ingresos? utilidad/ingresos:0; const roa = activo? utilidad/activo:0; const roe = capital? utilidad/capital:0; const gastosMens = gastos; const runway = gastosMens? caja/gastosMens:0;
-  const ks = [["Margen Neto", round2(margen)],["Liquidez", round2(liquidez)],["Prueba Ácida", round2(acida)],["ROA", round2(roa)],["ROE", round2(roe)],["Caja", round2(caja)],["Gastos Mensuales", round2(gastosMens)],["Runway (meses)", round2(runway)]];
-  kpi.getRange(2,1,ks.length,2).setValues(ks);
+  // --- Estado de Resultados (Income Statement) with Formulas ---
+  const lastErRow = er.getLastRow();
+  if (lastErRow > 1) {
+    er.getRange(2, 1, lastErRow - 1, 3).clearContent();
+  }
+  const erData = [
+    ["Ingresos", "4*", ""],
+    ["Costos de Venta", "500-*", ""],
+    ["Utilidad Bruta", "", ""],
+    ["Gastos de Operación", "510-*", ""],
+    ["Utilidad de Operación", "", ""],
+    ["Resultado Integral de Financiamiento", "520-*", ""],
+    ["Utilidad antes de Impuestos", "", ""],
+    ["Impuestos", "530-*", ""],
+    ["Utilidad Neta", "", ""]
+  ];
+  const erFormulas = [
+    [`=IFERROR(-SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 1)="4")), 0)`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="500")), 0)`],
+    [`=C2-C3`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="510")), 0)`],
+    [`=C4-C5`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="520")), 0)`],
+    [`=C6-C7`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="530")), 0)`],
+    [`=C8-C9`]
+  ];
+  er.getRange(2, 1, erData.length, 2).setValues(erData.map(row => [row[0], row[1]]));
+  er.getRange(2, 3, erFormulas.length, 1).setFormulas(erFormulas);
+
+  // --- Balance General (Balance Sheet) with Formulas ---
+  const lastBgRow = bg.getLastRow();
+  if (lastBgRow > 1) {
+    bg.getRange(2, 1, lastBgRow - 1, 3).clearContent();
+  }
+  const bgData = [
+    ["Activo", "1*", ""],
+    ["Pasivo", "2*", ""],
+    ["Capital Contable", "3*", ""],
+    ["Utilidad del Ejercicio", "", ""],
+    ["Total Pasivo + Capital", "", ""],
+    ["Suma de Verificación", "", ""]
+  ];
+  const bgFormulas = [
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 1)="1")), 0)`],
+    [`=IFERROR(-SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 1)="2")), 0)`],
+    [`=IFERROR(-SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 1)="3")), 0)`],
+    [`=IFERROR(EstadoResultados!C10, 0)`], // Utilidad Neta from ER
+    [`=C3+C4+C5`],
+    [`=C2-C6`]
+  ];
+  bg.getRange(2, 1, bgData.length, 2).setValues(bgData.map(row => [row[0], row[1]]));
+  bg.getRange(2, 3, bgFormulas.length, 1).setFormulas(bgFormulas);
+
+  // --- KPIs with Formulas ---
+  const lastKpiRow = kpi.getLastRow();
+  if (lastKpiRow > 1) {
+    kpi.getRange(2, 1, lastKpiRow - 1, 2).clearContent();
+  }
+  const kpiData = [
+    ["Margen Neto", ""],
+    ["ROA (Return on Assets)", ""],
+    ["ROE (Return on Equity)", ""],
+    ["Razón Circulante", ""],
+    ["Prueba Ácida", ""],
+    ["Apalancamiento", ""],
+    ["Días de Cartera", ""],
+    ["Días de Inventario", ""],
+    ["Días de Proveedores", ""]
+  ];
+  const kpiFormulas = [
+    [`=IFERROR(BalanceGeneral!C5 / EstadoResultados!C2, 0)`],
+    [`=IFERROR(BalanceGeneral!C5 / BalanceGeneral!C2, 0)`],
+    [`=IFERROR(BalanceGeneral!C5 / (BalanceGeneral!C4 + BalanceGeneral!C5), 0)`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 2)="11")) / -SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 2)="21")), 0)`],
+    [`=IFERROR((SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 2)="11")) - IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="130")), 0)) / -SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 2)="21")), 0)`],
+    [`=IFERROR(BalanceGeneral!C2 / (BalanceGeneral!C4 + BalanceGeneral!C5), 0)`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="120")) / (EstadoResultados!C2 / 365), 0)`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="130")) / (EstadoResultados!C3 / 365), 0)`],
+    [`=IFERROR(SUM(FILTER(Balanza!E:E, LEFT(Balanza!A:A, 3)="210")) / (EstadoResultados!C3 / 365), 0)`]
+  ];
+  kpi.getRange(2, 1, kpiData.length, 1).setValues(kpiData.map(row => [row[0]]));
+  kpi.getRange(2, 2, kpiFormulas.length, 1).setFormulas(kpiFormulas);
+
+  log("Estados financieros recalculados con fórmulas dinámicas.");
+  safeAlert_("Los estados financieros han sido actualizados y ahora usan fórmulas dinámicas.");
 }
 
 function mapearNombreCuenta_(cat){ const v=cat.getRange(2,1,Math.max(0,cat.getLastRow()-1),2).getValues(); const m={}; v.forEach(a=>m[a[0]]=a[1]); return m; }
@@ -645,22 +784,53 @@ function saldoPorCuenta_(rows, cta){ const r=rows.find(x=> x[0]===cta); return r
 /********************  CONCILIACIÓN AVANZADA  ********************/
 function conciliarBancariaAvanzada(){
   const ss=SpreadsheetApp.getActive(); const shB=ss.getSheetByName("Bancos"); const shI=ss.getSheetByName("Ingresos"); const shE=ss.getSheetByName("Egresos"); const tol=Number(getCfg("DIAS_TOLERANCIA_CONCILIACION"))||CFG.DIAS_TOLERANCIA_CONCILIACION;
-  const bank=shB.getRange(2,1,Math.max(0,shB.getLastRow()-1), shB.getLastColumn()).getValues();
+  const bankData = shB.getRange(2,1,Math.max(0,shB.getLastRow()-1), shB.getLastColumn()).getValues();
+
+  const bankRowsToUpdate = [];
+  const accountingRowsToUpdate = {};
+
   const idxI=indexarMovs_(shI); const idxE=indexarMovs_(shE); let c=0;
-  bank.forEach((r,i)=>{
-    const [fecha,,cargo,abono,importe,ref] = r;
-    const monto=Number(importe||cargo||abono||0); if(!fecha||!monto) return;
-    const target=(Number(cargo||0)>0)? idxE: idxI;
-    const hit=buscarMatch_(target, fecha, monto, ref, tol);
+
+  bankData.forEach((row, index) => {
+    const isReconciled = row[10]; // "Conciliado" column
+    if (isReconciled === "Sí") return;
+
+    const [fecha,,cargo,abono,importe,ref] = row;
+    const monto = Number(importe||cargo||abono||0);
+    if(!fecha || !monto) return;
+
+    const target = (Number(cargo||0)>0) ? idxE : idxI;
+    const hit = buscarMatch_(target, fecha, monto, ref, tol);
+
     if(hit){
-      shB.getRange(i+2,9).setValue(hit.folio||"");
-      shB.getRange(i+2,10).setValue(hit.uuid||"");
-      shB.getRange(i+2,11).setValue("Sí");
-      hit.sh.getRange(hit.row,17).setValue("Sí");
+      // Mark bank row for update
+      bankRowsToUpdate.push({row: index + 2, folio: hit.folio || "", uuid: hit.uuid || ""});
+
+      // Mark accounting row for update
+      const sheetName = hit.sh.getName();
+      if (!accountingRowsToUpdate[sheetName]) {
+        accountingRowsToUpdate[sheetName] = [];
+      }
+      accountingRowsToUpdate[sheetName].push(hit.row);
+
       c++;
     }
   });
-  log(`Conciliación avanzada: ${c} match.`);
+
+  // Batch-update rows for efficiency
+  bankRowsToUpdate.forEach(update => {
+    shB.getRange(update.row, 9, 1, 3).setValues([[update.folio, update.uuid, "Sí"]]);
+  });
+
+  for (const sheetName in accountingRowsToUpdate) {
+    const sheet = ss.getSheetByName(sheetName);
+    accountingRowsToUpdate[sheetName].forEach(rowNum => {
+      sheet.getRange(rowNum, 17).setValue("Sí");
+    });
+  }
+
+  log(`Conciliación avanzada: ${c} nuevas coincidencias.`);
+  return c; // Return the count
 }
 
 function indexarMovs_(sh){
@@ -752,14 +922,88 @@ function calcularIVA_Mensual(){
   return {periodo:pr.label, trasladado:tras16+tras8, acreditable:acred16+acred8, neto};
 }
 
-function calcularISR_PM_Mensual(){
-  const pr=periodo_(); const coef=Number(getCfg("COEF_UTILIDAD")||CFG.COEF_UTILIDAD); const tasa=Number(getCfg("ISR_PM_TASA")||CFG.ISR_PM_TASA);
-  const pol=SpreadsheetApp.getActive().getSheetByName("Polizas").getRange(2,1,Math.max(0,SpreadsheetApp.getActive().getSheetByName("Polizas").getLastRow()-1),12).getValues();
-  let ingresosAcum=0;
-  pol.forEach(r=>{ const fecha=new Date(r[0]); if(fecha.getFullYear()!==pr.ini.getFullYear()) return; const cta=String(r[3]); const haber=Number(r[7]||0); if(cta.startsWith("400-")) ingresosAcum+=haber; });
-  const utilidadEst=ingresosAcum*coef; const impuesto=round2(utilidadEst*tasa);
-  log(`ISR PM ${pr.label}: Ingresos Acum ${ingresosAcum} * coef ${coef} * tasa ${tasa} = ${impuesto}`);
-  return {periodo:pr.label, ingresosAcum, coef, tasa, impuesto};
+/**
+ * Calcula el ISR mensual llamando a la función específica del régimen fiscal configurado.
+ * @returns {Object} Un objeto con los detalles del cálculo del ISR.
+ */
+function calcularISR_Mensual() {
+  const regimen = getCfg("REGIMEN_FISCAL", "PM_General");
+  let resultado;
+
+  switch (regimen) {
+    case "PM_General":
+      resultado = calcularISR_Regimen_PM_General_();
+      break;
+    case "RESICO":
+      resultado = calcularISR_Regimen_RESICO_();
+      break;
+    case "PFAE":
+      resultado = calcularISR_Regimen_PFAE_();
+      break;
+    default:
+      const msg = `El régimen fiscal "${regimen}" no es soportado o no es válido.`;
+      log(msg);
+      safeAlert_(msg);
+      return { error: msg };
+  }
+
+  log(`Cálculo de ISR para ${regimen} finalizado.`);
+  return resultado;
+}
+
+/**
+ * Calcula el ISR para el régimen de Personas Morales (Régimen General).
+ * Basado en coeficiente de utilidad.
+ */
+function calcularISR_Regimen_PM_General_(){
+  const pr = periodo_();
+  const coef = Number(getCfg("COEF_UTILIDAD") || CFG.COEF_UTILIDAD);
+  const tasa = Number(getCfg("ISR_PM_TASA") || CFG.ISR_PM_TASA);
+
+  const pol = SpreadsheetApp.getActive().getSheetByName("Polizas").getRange(2, 1, Math.max(0, SpreadsheetApp.getActive().getSheetByName("Polizas").getLastRow() - 1), 12).getValues();
+  let ingresosAcum = 0;
+  pol.forEach(r => {
+    const fecha = new Date(r[0]);
+    if (fecha.getFullYear() !== pr.ini.getFullYear() || fecha > pr.fin) return;
+    const cta = String(r[3]);
+    const haber = Number(r[7] || 0);
+    if (cta.startsWith("400-")) {
+      ingresosAcum += haber;
+    }
+  });
+
+  const utilidadEst = ingresosAcum * coef;
+  const impuesto = round2(utilidadEst * tasa);
+  const logMsg = `ISR PM ${pr.label}: Ingresos Acum ${ingresosAcum} * Coef. ${coef} * Tasa ${tasa} = ${impuesto}`;
+  log(logMsg);
+  safeAlert_(logMsg);
+
+  return { periodo: pr.label, ingresosAcum, coef, tasa, impuesto, regimen: "PM_General" };
+}
+
+/**
+ * Placeholder para el cálculo de ISR del Régimen Simplificado de Confianza (RESICO).
+ */
+function calcularISR_Regimen_RESICO_() {
+  const pr = periodo_();
+  const msg = "La lógica de cálculo para RESICO aún no está implementada.";
+  log(msg);
+  safeAlert_(msg);
+  // Lógica futura: Basarse en ingresos y egresos efectivamente cobrados/pagados.
+  // Requerirá leer de las hojas de Ingresos/Egresos y filtrar por estado de pago.
+  return { periodo: pr.label, impuesto: 0, error: msg, regimen: "RESICO" };
+}
+
+/**
+ * Placeholder para el cálculo de ISR de Personas Físicas con Actividades Empresariales (PFAE).
+ */
+function calcularISR_Regimen_PFAE_() {
+  const pr = periodo_();
+  const msg = "La lógica de cálculo para PFAE aún no está implementada.";
+  log(msg);
+  safeAlert_(msg);
+  // Lógica futura: Basarse en ingresos menos deducciones autorizadas y aplicar tarifa progresiva.
+  return { periodo: pr.label, impuesto: 0, error: msg, regimen: "PFAE" };
 }
 
 function generarDIOT_CSV(){
@@ -949,16 +1193,85 @@ function aplicarPagosDesdeHojaMes_(label){
 }
 
 /********************  IMPORTACIÓN BANCOS (CSV)  ********************/
-function importarBancoDesdeCsv(nombreArchivo){
-  const ss=SpreadsheetApp.getActive();
-  const sh=ss.getSheetByName("Bancos");
-  const parent=DriveApp.getFileById(ss.getId()).getParents().next();
-  const files=parent.getFilesByName(nombreArchivo);
-  if(!files.hasNext()) throw new Error("CSV no encontrado");
-  const csv=files.next().getBlob().getDataAsString();
-  const rows=Utilities.parseCsv(csv);
-  sh.getRange(sh.getLastRow()+1,1,rows.length, Math.min(11, rows[0].length)).setValues(rows);
-  log(`Banco importado: ${nombreArchivo}`);
+function conciliarBancariaAvanzadaUI() {
+  const count = conciliarBancariaAvanzada();
+  return `Conciliación automática finalizada. Se encontraron ${count} coincidencias.`;
+}
+
+function importarEstadoDeCuentaCsv(nombreArchivo) {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName("Bancos");
+  let parentFolder;
+  try {
+    parentFolder = DriveApp.getFileById(ss.getId()).getParents().next();
+  } catch (e) {
+    throw new Error("No se pudo encontrar la carpeta contenedora de este archivo.");
+  }
+
+  const files = parentFolder.getFilesByName(nombreArchivo);
+  if (!files.hasNext()) {
+    throw new Error(`Archivo CSV no encontrado en Google Drive: ${nombreArchivo}`);
+  }
+
+  const csvData = files.next().getBlob().getDataAsString();
+  const rows = Utilities.parseCsv(csvData);
+
+  if (rows.length < 1) {
+    return "El archivo CSV está vacío.";
+  }
+
+  const headers = rows.shift().map(h => h.toLowerCase().trim());
+
+  // Mapeo inteligente de cabeceras
+  const headerMap = {};
+  const mapping = {
+    fecha: ['fecha', 'date'],
+    descripcion: ['descripción', 'descripcion', 'description', 'memo'],
+    cargo: ['cargo', 'debit', 'retiro'],
+    abono: ['abono', 'credit', 'deposito'],
+    importe: ['importe', 'monto', 'amount']
+  };
+
+  for (const key in mapping) {
+    for (const alias of mapping[key]) {
+      const index = headers.indexOf(alias);
+      if (index !== -1) {
+        headerMap[key] = index;
+        break;
+      }
+    }
+  }
+
+  if (headerMap.fecha === undefined) {
+    throw new Error("No se pudo encontrar una columna de 'Fecha' en el CSV.");
+  }
+
+  const processedRows = rows.map(row => {
+    const fecha = new Date(row[headerMap.fecha]);
+    const descripcion = row[headerMap.descripcion] || '';
+    const cargo = toNum(row[headerMap.cargo]);
+    const abono = toNum(row[headerMap.abono]);
+    // Si hay una columna 'importe' y no hay cargo/abono, usarla.
+    let importe = toNum(row[headerMap.importe]);
+    if(importe !== 0 && cargo === 0 && abono === 0) {
+      if (importe < 0) {
+        cargo = Math.abs(importe);
+      } else {
+        abono = importe;
+      }
+    }
+
+    return [fecha, descripcion, cargo, abono, '', '', '', '', '', '', 'No'];
+  }).filter(row => row[0] instanceof Date && !isNaN(row[0])); // Filtrar filas sin fecha válida
+
+  if (processedRows.length > 0) {
+    sh.getRange(sh.getLastRow() + 1, 1, processedRows.length, processedRows[0].length).setValues(processedRows);
+    const message = `Importación exitosa. Se agregaron ${processedRows.length} transacciones bancarias.`;
+    log(message);
+    return message;
+  } else {
+    return "No se encontraron filas válidas para importar en el CSV.";
+  }
 }
 // —— Maestros: alta/actualización automática + resaltado de cuentas faltantes
 function upsertMaestrosDesdeCFDI_(origen, Emisor, Receptor){
@@ -1264,6 +1577,140 @@ function importarReglasDeAsientos() {
   sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
   formatSheet_(sheet);
   log("Reglas de asientos importadas correctamente desde Asientos.csv.");
+}
+
+
+/********************  REPORTERÍA AVANZADA  ********************/
+function verReporteCliente() {
+  const htmlOutput = generarReporteHTML_();
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, "Reporte Financiero para Cliente");
+}
+
+function generarReporteHTML_() {
+  const ss = SpreadsheetApp.getActive();
+  const analisisSheet = ss.getSheetByName("AnalisisFinanciero");
+  const erSheet = ss.getSheetByName("EstadoResultados");
+  const bgSheet = ss.getSheetByName("BalanceGeneral");
+
+  // Leer datos usando getDisplayValues para conservar el formato
+  const analisisData = analisisSheet.getRange("A2:D" + analisisSheet.getLastRow()).getDisplayValues();
+  const erData = erSheet.getRange("A2:C" + erSheet.getLastRow()).getDisplayValues();
+  const bgData = bgSheet.getRange("A2:C" + bgSheet.getLastRow()).getDisplayValues();
+
+  const template = HtmlService.createTemplateFromFile('ReporteCliente');
+  template.periodo = getCfg("PERIODO_LABEL", new Date().toLocaleDateString());
+  template.analisis = analisisData;
+  template.er = erData;
+  template.bg = bgData;
+
+  return template.evaluate().setWidth(900).setHeight(600);
+}
+
+function generarGuionReunion() {
+  const periodo = getCfg("PERIODO_LABEL", "este periodo");
+  const nombreCliente = SpreadsheetApp.getActive().getName().replace("Contabilidad_", "");
+  const nombreDoc = `Guión de Reunión Financiera - ${nombreCliente} - ${periodo}`;
+
+  const textoGuion = generarTextoGuion_(periodo);
+
+  const doc = DocumentApp.create(nombreDoc);
+  doc.getBody().setText(textoGuion);
+
+  const url = doc.getUrl();
+  const msg = `Se ha creado el documento con el guión de la reunión. Puedes acceder a él aquí: ${url}`;
+  safeAlert_(msg);
+  log(msg);
+}
+
+function generarTextoGuion_() {
+  const ss = SpreadsheetApp.getActive();
+  const analisisSheet = ss.getSheetByName("AnalisisFinanciero");
+  const analisisData = analisisSheet.getRange("A2:D" + analisisSheet.getLastRow()).getDisplayValues();
+
+  let guion = `Guión para la Reunión de Análisis Financiero\n`;
+  guion += `========================================\n\n`;
+
+  guion += `Agenda:\n`;
+  guion += `1. Resumen de Desempeño del Periodo.\n`;
+  guion += `2. Análisis de Indicadores Clave (KPIs).\n`;
+  guion += `3. Discusión de Puntos Relevantes.\n`;
+  guion += `4. Definición del Plan de Acción.\n\n`;
+
+  guion += `Análisis de Indicadores Clave (KPIs)\n`;
+  guion += `------------------------------------\n`;
+
+  let currentGroup = "";
+  analisisData.forEach(row => {
+    const [grupo, indicador, valor, interpretacion] = row;
+    if (grupo !== currentGroup) {
+      guion += `\n**${grupo.toUpperCase()}**\n`;
+      currentGroup = grupo;
+    }
+    guion += `- **${indicador}:** ${valor}\n`;
+    guion += `  *Interpretación:* ${interpretacion}\n`;
+  });
+
+  guion += `\nTemas a Discutir\n`;
+  guion += `------------------\n`;
+  guion += `1. ¿Qué factores (internos/externos) explican los resultados de rentabilidad de este periodo?\n`;
+  guion += `2. La liquidez de la empresa es [adecuada/preocupante]. ¿Tenemos suficiente efectivo para las operaciones de los próximos 3 meses?\n`;
+  guion += `3. Los días de cartera son de [X días]. ¿Estamos conformes con este plazo o necesitamos optimizar la cobranza?\n`;
+  guion += `4. El nivel de endeudamiento es [bajo/alto]. ¿Cómo se alinea esto con nuestra estrategia de crecimiento?\n\n`;
+
+  guion += `Plan de Acción\n`;
+  guion += `--------------\n`;
+  guion += `- Tarea 1: [Definir responsable y fecha]\n`;
+  guion += `- Tarea 2: [Definir responsable y fecha]\n`;
+  guion += `- Tarea 3: [Definir responsable y fecha]\n`;
+
+  return guion;
+}
+
+
+/********************  UI WRAPPERS  ********************/
+// Estas funciones sirven como una capa intermedia para devolver mensajes de texto simples a la UI del sidebar.
+
+function importarCFDIIngresosUI() {
+  importarCFDIIngresos();
+  return "Importación de ingresos iniciada. Revise los logs para ver el detalle.";
+}
+
+function importarCFDIEgresosUI() {
+  importarCFDIEgresos();
+  return "Importación de egresos iniciada. Revise los logs para ver el detalle.";
+}
+
+function generarPolizasDesdeMovimientosUI() {
+  generarPolizasDesdeMovimientos();
+  return "Proceso de generación de pólizas finalizado.";
+}
+
+function recalcularEstadosUI() {
+  recalcularEstados();
+  return "Estados financieros recalculados con fórmulas.";
+}
+
+function calcularIVA_MensualUI() {
+  const resultado = calcularIVA_Mensual();
+  return `Cálculo de IVA finalizado. IVA a pagar/favor: ${resultado.neto}`;
+}
+
+function calcularISR_MensualUI() {
+  const resultado = calcularISR_Mensual();
+  if (resultado.error) {
+    return `Error: ${resultado.error}`;
+  }
+  return `Cálculo de ISR (${resultado.regimen}) finalizado. Impuesto: ${resultado.impuesto}`;
+}
+
+function exportarPDFsEstadosUI() {
+  exportarPDFsEstados();
+  return "PDFs exportados a su carpeta de Google Drive.";
+}
+
+function enviarPaqueteFiscalUI() {
+  enviarPaqueteFiscal();
+  return "Paquete fiscal enviado por correo.";
 }
 
 

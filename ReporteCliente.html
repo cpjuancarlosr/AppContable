@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #f4f7fa;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background-color: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      overflow: hidden;
+    }
+    .header {
+      background-color: #000B26; /* navy */
+      color: #fff;
+      padding: 30px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 500;
+    }
+    .header p {
+      margin: 5px 0 0;
+      font-size: 16px;
+      color: #CBE290; /* camel */
+    }
+    .content {
+      padding: 30px;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section h2 {
+      font-size: 22px;
+      font-weight: 500;
+      color: #402924; /* choc */
+      border-bottom: 2px solid #7CA7EB; /* blue */
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    th {
+      background-color: #f8f9fa;
+      font-weight: 500;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .kpi-group {
+        font-weight: bold;
+        background-color: #f2f2f2;
+        color: #402924;
+    }
+    .kpi-indicator {
+        padding-left: 25px !important;
+    }
+    .kpi-value {
+        font-weight: 500;
+        text-align: right;
+    }
+    .interpretation {
+        font-size: 13px;
+        color: #666;
+        padding-top: 0;
+    }
+    .summary-table td:first-child {
+        font-weight: 500;
+    }
+    .summary-table td:last-child {
+        text-align: right;
+        font-weight: 500;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: #777;
+      background-color: #f8f9fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Reporte Financiero</h1>
+      <p>Periodo: <?= periodo ?></p>
+    </div>
+    <div class="content">
+      <div class="section">
+        <h2>Análisis Financiero Clave</h2>
+        <table>
+          <tr>
+            <th>Indicador</th>
+            <th>Valor</th>
+          </tr>
+          <? for (let i = 0; i < analisis.length; i++) { ?>
+            <? if (i === 0 || analisis[i][0] !== analisis[i-1][0]) { ?>
+              <tr>
+                <td colspan="2" class="kpi-group"><?= analisis[i][0] ?></td>
+              </tr>
+            <? } ?>
+            <tr>
+              <td class="kpi-indicator"><?= analisis[i][1] ?></td>
+              <td class="kpi-value"><?= analisis[i][2] ?></td>
+            </tr>
+            <tr>
+              <td colspan="2" class="interpretation"><?= analisis[i][3] ?></td>
+            </tr>
+          <? } ?>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>Estado de Resultados</h2>
+        <table class="summary-table">
+          <? for (let i = 0; i < er.length; i++) { ?>
+            <tr>
+              <td><?= er[i][0] ?></td>
+              <td><?= er[i][2] ?></td>
+            </tr>
+          <? } ?>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>Balance General</h2>
+        <table class="summary-table">
+          <? for (let i = 0; i < bg.length; i++) { ?>
+            <tr>
+              <td><?= bg[i][0] ?></td>
+              <td><?= bg[i][2] ?></td>
+            </tr>
+          <? } ?>
+        </table>
+      </div>
+    </div>
+    <div class="footer">
+      Reporte generado por Sistema Contable MX.
+    </div>
+  </div>
+</body>
+</html>
