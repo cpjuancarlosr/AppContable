@@ -1,0 +1,45 @@
+AsientoID,Nombre,TipoCFDI,MetodoPago,FormaPago,Condicion,AplicaPF,AplicaPM,Cuenta_Debe,Cuenta_Haber,Tratamiento_IVA,Tratamiento_Ret,Tipo_Poliza,Concepto_Base
+VTA16_PUE,Venta 16% PUE,I,PUE,*,Sin complemento,Si,Si,Clientes:[RFC],IVA Trasladado 16,Trasladado 16 sin cobro,Sin retenciones,Ingreso,"Venta nacional 16% PUE"
+,, , , , , , , ,Ventas 16, , , ,
+VTA16_PPD,Venta 16% PPD (facturación),I,PPD,*,Sin complemento,Si,Si,Clientes:[RFC],IVA Trasladado 16,Trasladado 16 pendiente,Sin retenciones,Diario,"Venta nacional 16% PPD"
+,, , , , , , , ,Ventas 16, , , ,
+COBRO_PPD,Complemento de pago (cobro),P,*,*,EsComplementoPago=Si,Si,Si,Bancos:[Cuenta],Clientes:[RFC],Trasladado 16 cobrado,Reclasifica IVA cobrado,Ingreso,"Cobro a cliente PPD"
+,, , , , , , ,IVA Trasladado cobrado,IVA Trasladado 16, , , ,
+VTA0_PUE,Venta 0% PUE,I,PUE,*,Sin complemento,Si,Si,Clientes:[RFC],Ventas 0,0% sin IVA,Sin retenciones,Ingreso,"Venta 0% PUE"
+VTA_EXE_PUE,Venta exenta PUE,I,PUE,*,Sin complemento,Si,Si,Clientes:[RFC],Ventas Exento,Exento,Sin retenciones,Ingreso,"Venta exenta PUE"
+NC_VTA16,Nota crédito a venta 16,E,*,*,Relacionada a UUID de venta,Si,Si,Ventas 16,Clientes:[RFC],Devuelve IVA,Sin retenciones,Diario,"NC sobre venta 16"
+,, , , , , , ,IVA Trasladado 16, , , , ,
+COMPRA16_PPD,Compra 16% PPD (provisión),E,PPD,*,Sin complemento,Si,Si,Gastos 16,Proveedores:[RFC],Acreditable 16,Sin retenciones,Diario,"Compra 16% PPD"
+,, , , , , , ,IVA Acreditable 16, , , , ,
+PAGO_PPD,Complemento de pago a proveedor,P,*,*,EsComplementoPago=Si,Si,Si,Proveedores:[RFC],Bancos:[Cuenta],Acreditable 16 sobre pagado,Reclasifica si aplica,Egresa,"Pago a proveedor PPD"
+COMPRA16_PUE,Compra 16% PUE (contado),E,PUE,*,Sin complemento,Si,Si,Gastos 16,Bancos:[Cuenta],Acreditable 16,Sin retenciones,Egresa,"Compra 16% PUE"
+COMPRA0,Compra 0%/export,E,*,*,Sin IVA,Si,Si,Gastos 0,Proveedores:[RFC],0% sin IVA,Sin retenciones,Diario,"Compra 0%"
+COMPRA_EXE,Compra exenta,E,*,*,Exento,Si,Si,Gastos Exento,Proveedores:[RFC],Exento,Sin retenciones,Diario,"Compra exenta"
+NC_PROV16,Nota crédito de proveedor 16,E,*,*,Relacionada a UUID de compra,Si,Si,Proveedores:[RFC],Gastos 16,Disminuye acreditable,Sin retenciones,Diario,"NC de proveedor 16"
+,, , , , , , , ,IVA Acreditable 16, , , ,
+ANT_CLIENTE,Anticipo de cliente,I,*,*,Sin complemento,Si,Si,Bancos:[Cuenta],Anticipos de clientes,Sin IVA inmediato,Sin retenciones,Ingreso,"Anticipo de cliente"
+APL_ANT_CLIENTE,Aplicación de anticipo a venta,I,*,*,Con relación a anticipo,Si,Si,Anticipos de clientes,Clientes:[RFC],Traslado según tasa,Sin retenciones,Diario,"Aplicación anticipo"
+ANT_PROV,Anticipo a proveedor,E,*,*,Sin complemento,Si,Si,Anticipos a proveedores,Bancos:[Cuenta],Sin IVA inmediato,Sin retenciones,Egresa,"Anticipo a proveedor"
+APL_ANT_PROV,Aplicación de anticipo a compra,E,*,*,Con relación a anticipo,Si,Si,Gastos según compra,Anticipos a proveedores,Acreditable según tasa,Sin retenciones,Diario,"Aplicación anticipo"
+NOMINA_PROV,Nómina (provisión),N,*,*,Periodo abierto,Si,Si,Sueldos y salarios,Sueldos por pagar,Sin IVA,ISR ret e ISN,Diario,"Provisión nómina"
+,, , , , , , ,IMSS por pagar, , , , ,
+,, , , , , , ,ISR retenido por pagar, , , , ,
+,, , , , , , ,ISN por pagar, , , , ,
+NOMINA_PAGO,Pago de nómina,N,*,*,Contra provisión,Si,Si,Sueldos por pagar,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago nómina"
+IMSS_PAGO,Pago IMSS/INFONAVIT,*,*,*,Vencimiento,Si,Si,IMSS por pagar,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago cuotas"
+ISN_PAGO,Pago ISN,*,*,*,Vencimiento,Si,Si,ISN por pagar,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago ISN"
+ISR_PROP_PROV,ISR provisional (provisión),*,*,*,Cierre mensual,Si,Si,Gasto ISR provisional,ISR por pagar,Sin IVA,Sin retenciones,Diario,"Provisión ISR mensual"
+ISR_PROP_PAGO,Pago ISR provisional,*,*,*,Vencimiento,Si,Si,ISR por pagar,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago ISR provisional"
+IVA_CIERRE,IVA por pagar al cierre,*,*,*,Cierre mensual,Si,Si,IVA Trasladado cobrado,IVA por pagar,Conciliación IVA,Sin retenciones,Diario,"Cierre IVA mensual"
+,, , , , , , , ,IVA Acreditable 16, , , , ,
+RET_ISR_CLTE,Retención ISR cobrada (si aplica),I,*,*,Si XML trae ISR_Ret>0,Si,Si,Clientes:[RFC],ISR retenido por pagar,Sin IVA,ISR retenido,Ingreso,"Retención ISR cobrada"
+RET_IVA_CLTE,Retención IVA cobrada (si aplica),I,*,*,Si XML trae IVA_Ret>0,Si,Si,Clientes:[RFC],IVA retenido por pagar,Sin IVA,IVA retenido,Ingreso,"Retención IVA cobrada"
+RET_ISR_PROV,Retención ISR a proveedor,E,*,*,Si XML trae ISR_Ret>0,Si,Si,Gastos 16,Proveedores:[RFC],Acreditable ajustado,ISR retenido,Diario,"Retención ISR a proveedor"
+,, , , , , , ,ISR retenido por pagar, , , , ,
+RET_IVA_PROV,Retención IVA a proveedor,E,*,*,Si XML trae IVA_Ret>0,Si,Si,Gastos 16,Proveedores:[RFC],Acreditable ajustado,IVA retenido,Diario,"Retención IVA a proveedor"
+,, , , , , , ,IVA retenido por pagar, , , , ,
+DEPR_MENS,Depreciación mensual,*,*,*,Cierre mensual,Si,Si,Gasto depreciación,Depreciación acumulada,Sin IVA,Sin retenciones,Diario,"Depreciación del mes"
+PTU_PROV,PTU (provisión),*,*,*,Cierre anual o mensual,Si,Si,Gasto PTU,PTU por pagar,Sin IVA,Sin retenciones,Diario,"Provisión PTU"
+PTU_PAGO,Pago PTU,*,*,*,Posterior a provisión,Si,Si,PTU por pagar,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago PTU"
+DIV_PAGO,Dividendo decretado/pagado,*,*,*,Con acta,No,Si,Resultados acumulados,Bancos:[Cuenta],Sin IVA,Sin retenciones,Egresa,"Pago de dividendos"
+APORT_SOC,Aportación de socios,*,*,*,Capitalización,No,Si,Bancos:[Cuenta],Capital social,Sin IVA,Sin retenciones,Ingreso,"Aportación de capital"
