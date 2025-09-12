@@ -226,6 +226,7 @@ function prepararConfig(){
     ["LISTA_TASKS", CFG.LISTA_TASKS, "Lista de Tasks"],
     ["CALENDARIO_NOMBRE", CFG.CALENDARIO_NOMBRE, "Calendario de obligaciones"],
     ["REGIMEN_FISCAL", "PM_General", "Ej: PM_General, RESICO, PFAE"],
+    ["TIPO_PERSONA", "Moral", "Moral o Fisica"],
     ["IVA_16", CFG.IVA_TASAS["16"], "Tasa general"],
     ["IVA_8", CFG.IVA_TASAS["8"], "Frontera"],
     ["ISR_PM_TASA", CFG.ISR_PM_TASA, "Tasa PM"],
@@ -825,7 +826,7 @@ function conciliarBancariaAvanzada(){
   for (const sheetName in accountingRowsToUpdate) {
     const sheet = ss.getSheetByName(sheetName);
     accountingRowsToUpdate[sheetName].forEach(rowNum => {
-      sheet.getRange(rowNum, 17).setValue("Sí");
+      sheet.getRange(rowNum, 20).setValue("Sí"); // Corrected column index for "Conciliado"
     });
   }
 
@@ -837,6 +838,9 @@ function indexarMovs_(sh){
   const vals=sh.getRange(2,1,Math.max(0,sh.getLastRow()-1), sh.getLastColumn()).getValues();
   const arr=[];
   vals.forEach((r,i)=>{
+    const isReconciled = r[19]; // "Conciliado" column
+    if (isReconciled === "Sí") return;
+
     const fecha=r[0], folio=r[1], total=r[10], uuid=r[15];
     if(!fecha||!total) return;
     arr.push({fecha:new Date(fecha), monto:Number(total), folio, uuid, row:i+2, sh});
@@ -982,28 +986,114 @@ function calcularISR_Regimen_PM_General_(){
 }
 
 /**
- * Placeholder para el cálculo de ISR del Régimen Simplificado de Confianza (RESICO).
+ * Calcula el ISR para el Régimen Simplificado de Confianza (RESICO).
+ * Se basa en el flujo de efectivo (cobrado/pagado) y distingue entre Persona Moral y Física.
  */
 function calcularISR_Regimen_RESICO_() {
+  const ss = SpreadsheetApp.getActive();
   const pr = periodo_();
-  const msg = "La lógica de cálculo para RESICO aún no está implementada.";
-  log(msg);
-  safeAlert_(msg);
-  // Lógica futura: Basarse en ingresos y egresos efectivamente cobrados/pagados.
-  // Requerirá leer de las hojas de Ingresos/Egresos y filtrar por estado de pago.
-  return { periodo: pr.label, impuesto: 0, error: msg, regimen: "RESICO" };
+  const tipoPersona = getCfg("TIPO_PERSONA", "Moral");
+
+  const shI = ss.getSheetByName("Ingresos");
+  const shE = ss.getSheetByName("Egresos");
+
+  const allIngresos = shI.getRange(2, 1, Math.max(0, shI.getLastRow() - 1), shI.getLastColumn()).getValues();
+  const allEgresos = shE.getRange(2, 1, Math.max(0, shE.getLastRow() - 1), shE.getLastColumn()).getValues();
+
+  // Filtra por flujo de efectivo (pagado) y por el periodo actual del año
+  const ingresosEfectivos = allIngresos.filter(r => {
+    const fecha = new Date(r[0]);
+    return r[14] === 'Pagado' && fecha.getFullYear() === pr.ini.getFullYear() && fecha <= pr.fin;
+  }).reduce((acc, r) => acc + toNum(r[6]), 0); // Suma el subtotal
+
+  const egresosEfectivos = allEgresos.filter(r => {
+    const fecha = new Date(r[0]);
+    return r[14] === 'Pagado' && fecha.getFullYear() === pr.ini.getFullYear() && fecha <= pr.fin;
+  }).reduce((acc, r) => acc + toNum(r[6]), 0); // Suma el subtotal
+
+  let impuesto = 0;
+  let tasa = 0;
+  let base = 0;
+  let logMsg = "";
+
+  if (tipoPersona === 'Moral') {
+    base = ingresosEfectivos - egresosEfectivos;
+    tasa = 0.30; // Tasa fija para PM RESICO
+    impuesto = round2(Math.max(0, base) * tasa);
+    logMsg = `ISR RESICO PM ${pr.label}: (Ingresos ${ingresosEfectivos} - Egresos ${egresosEfectivos}) * ${tasa * 100}% = ${impuesto}`;
+  } else { // Persona Física
+    base = ingresosEfectivos;
+    if (base <= 300000) tasa = 0.01;
+    else if (base <= 600000) tasa = 0.011;
+    else if (base <= 1000000) tasa = 0.015;
+    else if (base <= 2500000) tasa = 0.02;
+    else tasa = 0.025;
+
+    impuesto = round2(base * tasa);
+    logMsg = `ISR RESICO PF ${pr.label}: Ingresos Acum ${base} * Tasa ${tasa * 100}% = ${impuesto}`;
+  }
+
+  log(logMsg);
+  safeAlert_(logMsg);
+
+  return { periodo: pr.label, base, tasa, impuesto, regimen: `RESICO ${tipoPersona}` };
 }
 
 /**
- * Placeholder para el cálculo de ISR de Personas Físicas con Actividades Empresariales (PFAE).
+ * Calcula el ISR para el régimen de Personas Físicas con Actividades Empresariales (PFAE).
+ * Se basa en la utilidad (ingresos - egresos) y aplica la tarifa progresiva mensual.
  */
 function calcularISR_Regimen_PFAE_() {
+  const ss = SpreadsheetApp.getActive();
   const pr = periodo_();
-  const msg = "La lógica de cálculo para PFAE aún no está implementada.";
-  log(msg);
-  safeAlert_(msg);
-  // Lógica futura: Basarse en ingresos menos deducciones autorizadas y aplicar tarifa progresiva.
-  return { periodo: pr.label, impuesto: 0, error: msg, regimen: "PFAE" };
+
+  const shI = ss.getSheetByName("Ingresos");
+  const shE = ss.getSheetByName("Egresos");
+
+  const allIngresos = shI.getRange(2, 1, Math.max(0, shI.getLastRow() - 1), shI.getLastColumn()).getValues();
+  const allEgresos = shE.getRange(2, 1, Math.max(0, shE.getLastRow() - 1), shE.getLastColumn()).getValues();
+
+  const ingresosDelMes = allIngresos.filter(r => {
+    const fecha = new Date(r[0]);
+    return r[14] === 'Pagado' && fecha >= pr.ini && fecha <= pr.fin;
+  }).reduce((acc, r) => acc + toNum(r[6]), 0);
+
+  const egresosDelMes = allEgresos.filter(r => {
+    const fecha = new Date(r[0]);
+    return r[14] === 'Pagado' && fecha >= pr.ini && fecha <= pr.fin;
+  }).reduce((acc, r) => acc + toNum(r[6]), 0);
+
+  const base = ingresosDelMes - egresosDelMes;
+
+  // Tarifa Mensual ISR 2023 para PFAE
+  const tablaISR = [
+    { limInf: 0.01, limSup: 746.04, cuotaFija: 0.00, porciento: 0.0192 },
+    { limInf: 746.05, limSup: 6332.05, cuotaFija: 14.32, porciento: 0.0640 },
+    { limInf: 6332.06, limSup: 11128.01, cuotaFija: 371.83, porciento: 0.1088 },
+    { limInf: 11128.02, limSup: 12935.82, cuotaFija: 893.63, porciento: 0.1600 },
+    { limInf: 12935.83, limSup: 15487.71, cuotaFija: 1182.88, porciento: 0.1792 },
+    { limInf: 15487.72, limSup: 31236.49, cuotaFija: 1640.18, porciento: 0.2136 },
+    { limInf: 31236.50, limSup: 49233.00, cuotaFija: 5004.12, porciento: 0.2352 },
+    { limInf: 49233.01, limSup: 93993.90, cuotaFija: 9236.89, porciento: 0.3000 },
+    { limInf: 93993.91, limSup: 125325.20, cuotaFija: 22665.17, porciento: 0.3200 },
+    { limInf: 125325.21, limSup: 375975.61, cuotaFija: 32691.18, porciento: 0.3400 },
+    { limInf: 375975.62, limSup: Infinity, cuotaFija: 117912.32, porciento: 0.3500 }
+  ];
+
+  let impuesto = 0;
+  if (base > 0) {
+    const rango = tablaISR.find(r => base >= r.limInf && base <= r.limSup);
+    if (rango) {
+      const excedente = base - rango.limInf;
+      impuesto = round2((excedente * rango.porciento) + rango.cuotaFija);
+    }
+  }
+
+  const logMsg = `ISR PFAE ${pr.label}: (Ingresos ${ingresosDelMes} - Egresos ${egresosDelMes}) = Base ${base}. Impuesto: ${impuesto}`;
+  log(logMsg);
+  safeAlert_(logMsg);
+
+  return { periodo: pr.label, base, impuesto, regimen: "PFAE" };
 }
 
 function generarDIOT_CSV(){
@@ -1666,6 +1756,79 @@ function generarTextoGuion_() {
   return guion;
 }
 
+
+/********************  MANUAL_RECONCILIATION  ********************/
+function getUnmatchedBankTxs() {
+  const sh = SpreadsheetApp.getActive().getSheetByName("Bancos");
+  const data = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), sh.getLastColumn()).getValues();
+  const unmatched = [];
+  data.forEach((row, index) => {
+    if (row[10] !== 'Sí') {
+      unmatched.push({
+        rowNum: index + 2, // 1-based index for sheet, plus 1 for header
+        fecha: row[0],
+        descripcion: row[1],
+        cargo: row[2],
+        abono: row[3]
+      });
+    }
+  });
+  return unmatched;
+}
+
+function getUnmatchedAccountTxs() {
+  const ss = SpreadsheetApp.getActive();
+  const unmatched = [];
+  const sheets = ["Ingresos", "Egresos"];
+
+  sheets.forEach(sheetName => {
+    const sh = ss.getSheetByName(sheetName);
+    const data = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), sh.getLastColumn()).getValues();
+    data.forEach((row, index) => {
+      // Assuming 'Conciliado' is in column 17 (index 16) for both sheets
+      if (row[19] !== 'Sí') { // Corregido a columna 20 (índice 19) que es 'Conciliado'
+        unmatched.push({
+          rowNum: index + 2,
+          sheet: sheetName,
+          fecha: row[0],
+          tercero: row[2],
+          total: row[10]
+        });
+      }
+    });
+  });
+  return unmatched;
+}
+
+function reconcileManualMatch_(bankTxIds, accountTxIds) {
+  const ss = SpreadsheetApp.getActive();
+  const shBancos = ss.getSheetByName("Bancos");
+
+  bankTxIds.forEach(id => {
+    const rowNum = parseInt(id.split('|')[0]);
+    shBancos.getRange(rowNum, 11).setValue("Sí"); // Columna 'Conciliado'
+  });
+
+  const accountUpdates = {};
+  accountTxIds.forEach(id => {
+    const [rowNum, sheetName] = id.split('|');
+    if (!accountUpdates[sheetName]) {
+      accountUpdates[sheetName] = [];
+    }
+    accountUpdates[sheetName].push(parseInt(rowNum));
+  });
+
+  for (const sheetName in accountUpdates) {
+    const sh = ss.getSheetByName(sheetName);
+    accountUpdates[sheetName].forEach(rowNum => {
+      sh.getRange(rowNum, 20).setValue("Sí"); // Corregido a columna 20 (índice 19)
+    });
+  }
+
+  const total = bankTxIds.length + accountTxIds.length;
+  log(`${total} items marcados como conciliados manualmente.`);
+  return `${total} items conciliados exitosamente.`;
+}
 
 /********************  UI WRAPPERS  ********************/
 // Estas funciones sirven como una capa intermedia para devolver mensajes de texto simples a la UI del sidebar.

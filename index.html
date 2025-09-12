@@ -61,6 +61,68 @@
         .withFailureHandler(err => toast('Error: ' + err.message))
         [functionName]();
     }
+
+    function initManualReconciliation() {
+      toast('Cargando datos para conciliación manual...');
+      document.getElementById('manual-reconciliation-ui').style.display = 'block';
+
+      google.script.run.withSuccessHandler(data => {
+        populateTable('bank-tx-table', data, ['rowNum', 'fecha', 'descripcion', 'cargo', 'abono'], 'bank');
+      }).getUnmatchedBankTxs();
+
+      google.script.run.withSuccessHandler(data => {
+        populateTable('account-tx-table', data, ['rowNum', 'sheet', 'fecha', 'tercero', 'total'], 'account');
+      }).getUnmatchedAccountTxs();
+    }
+
+    function populateTable(tableId, data, headers, type) {
+      let table = '<table><tr>';
+      let header_names = {'rowNum': '#', 'fecha': 'Fecha', 'descripcion': 'Descripción', 'cargo': 'Cargo', 'abono': 'Abono', 'sheet': 'Hoja', 'tercero': 'Tercero', 'total':'Total' }
+      headers.forEach(h => {
+        if (h !== 'rowNum' && h !== 'sheet') { // Don't show these internal IDs
+          table += `<th>${header_names[h]}</th>`;
+        }
+      });
+      table += '<th>Sel.</th></tr>';
+
+      data.forEach(row => {
+        table += '<tr>';
+        headers.forEach(h => {
+          if (h !== 'rowNum' && h !== 'sheet') {
+            let val = row[h];
+            // Format date nicely
+            if (val instanceof Date || (typeof val === 'string' && val.includes('T'))) {
+              val = new Date(val).toLocaleDateString('es-MX');
+            }
+            table += `<td>${val}</td>`;
+          }
+        });
+        table += `<td><input type="checkbox" name="${type}-tx" value="${row.rowNum}|${row.sheet || ''}"></td>`;
+        table += '</tr>';
+      });
+      table += '</table>';
+      document.getElementById(tableId).innerHTML = table;
+    }
+
+    function reconcileManualMatch() {
+      const bankChecks = Array.from(document.querySelectorAll('input[name="bank-tx"]:checked')).map(cb => cb.value);
+      const accountChecks = Array.from(document.querySelectorAll('input[name="account-tx"]:checked')).map(cb => cb.value);
+
+      if (bankChecks.length === 0 || accountChecks.length === 0) {
+        toast('Debe seleccionar al menos una transacción bancaria y una contable.');
+        return;
+      }
+
+      toast('Procesando conciliación manual...');
+      google.script.run
+        .withSuccessHandler(result => {
+          toast(result);
+          initManualReconciliation(); // Refresh the tables
+        })
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        .reconcileManualMatch_(bankChecks, accountChecks);
+    }
+
     function init(){
       google.script.run.withSuccessHandler(ps=>{
         const sel=document.getElementById('periodo');
@@ -111,6 +173,15 @@
     <hr style="margin: 20px 0;"/>
     <p>Una vez importado, ejecute la conciliación automática para encontrar coincidencias.</p>
     <button onclick="runAutoReconciliation()">2. Ejecutar Conciliación Automática</button>
+    <hr style="margin: 20px 0;"/>
+    <button onclick="initManualReconciliation()">3. Iniciar Conciliación Manual</button>
+    <div id="manual-reconciliation-ui" style="display:none; margin-top: 20px;">
+      <h3>Transacciones Bancarias no Conciliadas</h3>
+      <div id="bank-tx-table" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc;"></div>
+      <h3 style="margin-top: 20px;">Movimientos Contables no Conciliados</h3>
+      <div id="account-tx-table" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc;"></div>
+      <button onclick="reconcileManualMatch()" style="margin-top: 20px;">Reconciliar Seleccionados</button>
+    </div>
   </section>
 
   <section id="imp">
