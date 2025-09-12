@@ -251,27 +251,27 @@ function prepararMaestros(){
 
 function prepararCatCuentas(){
   const sh = SpreadsheetApp.getActive().getSheetByName("CatCuentas"); sh.clear();
-  sh.getRange(1,1,1,7).setValues([["Codigo","Nombre","Tipo","SAT","Nivel","Padre","Naturaleza"]]).setFontWeight("bold");
+  sh.getRange(1,1,1,8).setValues([["Codigo","Nombre","Tipo","SAT","Nivel","Padre","Naturaleza", "PalabrasClave"]]).setFontWeight("bold");
   const base = [
-    ["100-000","Activo Circulante","Activo","",1,"","Deudora"],
-    ["110-100","Bancos","Activo","",2,"100-000","Deudora"],
-    ["110-110","Banco MXN","Activo","",3,"110-100","Deudora"],
-    ["120-000","Clientes","Activo","",2,"100-000","Deudora"],
-    ["130-000","Inventarios","Activo","",2,"100-000","Deudora"],
-    ["200-000","Pasivo Corto Plazo","Pasivo","",1,"","Acreedora"],
-    ["210-100","Proveedores","Pasivo","",2,"200-000","Acreedora"],
-    ["240-200","IVA Trasladado 16%","Impuesto","",3,"200-000","Acreedora"],
-    ["240-210","IVA Trasladado 8%","Impuesto","",3,"200-000","Acreedora"],
-    ["240-300","IVA Acreditable 16%","Impuesto","",3,"200-000","Deudora"],
-    ["240-310","IVA Acreditable 8%","Impuesto","",3,"200-000","Deudora"],
-    ["240-400","ISR Retenido","Impuesto","",2,"200-000","Acreedora"],
-    ["300-000","Capital","Capital","",1,"","Acreedora"],
-    ["400-000","Ingresos","Resultado","",1,"","Acreedora"],
-    ["500-000","Costo/Ventas","Resultado","",1,"","Deudora"],
-    ["510-000","Gastos","Resultado","",1,"","Deudora"],
-    ["520-000","Gastos Honorarios","Resultado","",2,"510-000","Deudora"]
+    ["100-000","Activo Circulante","Activo","",1,"","Deudora", ""],
+    ["110-100","Bancos","Activo","",2,"100-000","Deudora", ""],
+    ["110-110","Banco MXN","Activo","",3,"110-100","Deudora", ""],
+    ["120-000","Clientes","Activo","",2,"100-000","Deudora", ""],
+    ["130-000","Inventarios","Activo","",2,"100-000","Deudora", "inventario,materia prima"],
+    ["200-000","Pasivo Corto Plazo","Pasivo","",1,"","Acreedora", ""],
+    ["210-100","Proveedores","Pasivo","",2,"200-000","Acreedora", ""],
+    ["240-200","IVA Trasladado 16%","Impuesto","",3,"200-000","Acreedora", ""],
+    ["240-210","IVA Trasladado 8%","Impuesto","",3,"200-000","Acreedora", ""],
+    ["240-300","IVA Acreditable 16%","Impuesto","",3,"200-000","Deudora", ""],
+    ["240-310","IVA Acreditable 8%","Impuesto","",3,"200-000","Deudora", ""],
+    ["240-400","ISR Retenido","Impuesto","",2,"200-000","Acreedora", ""],
+    ["300-000","Capital","Capital","",1,"","Acreedora", ""],
+    ["400-000","Ingresos","Resultado","",1,"","Acreedora", "ingreso,venta"],
+    ["500-000","Costo/Ventas","Resultado","",1,"","Deudora", ""],
+    ["510-000","Gastos","Resultado","",1,"","Deudora", "gasto,comision,gasolina"],
+    ["520-000","Gastos Honorarios","Resultado","",2,"510-000","Deudora", "honorarios,consultoria"]
   ];
-  sh.getRange(2,1,base.length,7).setValues(base);
+  sh.getRange(2,1,base.length,8).setValues(base);
   formatSheet_(sh);
 }
 
@@ -1243,6 +1243,36 @@ function toNum(n){ return Number(n||0); }
 function round2(n){ return Math.round(Number(n)*100)/100; }
 function tasaLabel_(t){ if(t===0.16) return "16"; if(t===0.08) return "8"; return "0"; }
 
+function buildKeywordMap_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName("CatCuentas");
+  const data = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), 8).getValues();
+  const keywordMap = {};
+
+  data.forEach(row => {
+    const accountCode = row[0];
+    const keywords = (row[7] || "").split(',');
+    keywords.forEach(kw => {
+      const trimmedKw = kw.trim().toLowerCase();
+      if (trimmedKw) {
+        keywordMap[trimmedKw] = accountCode;
+      }
+    });
+  });
+
+  return keywordMap;
+}
+
+function findAccountByKeywords_(description, keywordMap) {
+  if (!description) return null;
+  const descLower = description.toLowerCase();
+  for (const keyword in keywordMap) {
+    if (descLower.includes(keyword)) {
+      return keywordMap[keyword];
+    }
+  }
+  return null;
+}
+
 /********************  HOJA MENSUAL + VÍNCULOS + MAESTROS  ********************/
 function registrarEnHojaMes_(label, rowMes){
   const name = `CFDI_${label}`;
@@ -1461,6 +1491,7 @@ function importarCFDI_(folderId, esIngreso){
 
   const pr = periodo_();
   const fol = DriveApp.getFolderById(folderId);
+  const keywordMap = buildKeywordMap_(); // Build the map once
 
   // 1) sets para evitar duplicados
   const setUUID = uuidsExistentes_();
@@ -1529,11 +1560,16 @@ function importarCFDI_(folderId, esIngreso){
       const rfc     = esIngreso? (Receptor.Rfc||"")             : (Emisor.Rfc||"");
       const concepto = `CFDI ${src.name || ''} [Tipo:${Tipo||'?'}]`;
       const relsJoined = rels.join('|');
+
+      // --- Nueva Lógica de Mapeo de Cuentas ---
+      let cuentaContable = findAccountByKeywords_(concepto, keywordMap);
+      // Si no se encuentra por keyword, se deja vacío para mapeo manual posterior por proveedor/cliente.
+
       const rowIE = [
         Fecha, Folio, tercero, rfc, concepto,
         tasaLabel_(tasa), Subtotal, impuestos.iva, impuestos.retIva, impuestos.retIsr,
         Total, Metodo, Forma, "", "Pendiente", UUID,
-        relsJoined, "", "", "No", "No"
+        relsJoined, cuentaContable || "", "", "No", "No" // Se inserta la cuenta encontrada
       ];
 
       const k = keyMovimientoFromRow_(rowIE);
