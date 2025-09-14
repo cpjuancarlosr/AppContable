@@ -14,19 +14,18 @@ function aplicarTemaVisual(ss) {
     grisSuave: '#F5F5F5'
   };
 
-  const theme = SpreadsheetApp.newTheme()
-    .setThemeColor(SpreadsheetApp.ThemeColorType.TEXT, paleta.texto)
-    .setThemeColor(SpreadsheetApp.ThemeColorType.BACKGROUND, paleta.fondo)
-    .setThemeColor(SpreadsheetApp.ThemeColorType.ACCENT1, paleta.naranja)
-    .setThemeColor(SpreadsheetApp.ThemeColorType.ACCENT2, paleta.azul)
-    .setFontFamily("Rubik")
-    .build();
+  const theme = ss.getSpreadsheetTheme()
+    .setConcreteColor(SpreadsheetApp.ThemeColorType.TEXT, paleta.texto)
+    .setConcreteColor(SpreadsheetApp.ThemeColorType.BACKGROUND, paleta.fondo)
+    .setConcreteColor(SpreadsheetApp.ThemeColorType.ACCENT1, paleta.naranja)
+    .setConcreteColor(SpreadsheetApp.ThemeColorType.ACCENT2, paleta.azul)
+    .setFontFamily("Rubik");
 
   ss.setSpreadsheetTheme(theme);
 
   ss.getSheets().forEach(sh => {
     // Set default font size for the entire sheet
-    sh.getRange("A1:Z1000").setFontSize(10);
+    sh.getRange("A1:Z1000").setFontSize(10).setFontFamily("Rubik");
 
     // Style headers
     const headerRange = sh.getRange(1, 1, 1, sh.getMaxColumns());
