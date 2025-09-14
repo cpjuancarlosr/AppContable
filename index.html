@@ -31,12 +31,18 @@
     function importarCSV(){
       const filename = document.getElementById('csv-filename').value;
       if (!filename) {
-        toast('Por favor, ingrese un nombre de archivo.');
+        toast('Por favor, seleccione un archivo.');
         return;
       }
       toast('Importando: ' + filename + '...');
       google.script.run
-        .withSuccessHandler(result => toast(result))
+        .withSuccessHandler(result => {
+          toast(result);
+          // Optionally, refresh the reconciliation data
+          if (document.getElementById('manual-reconciliation-ui').style.display === 'block') {
+            initManualReconciliation();
+          }
+        })
         .withFailureHandler(err => toast('Error: ' + err.message))
         .importarEstadoDeCuentaCsv(filename);
     }
@@ -123,12 +129,38 @@
         .reconcileManualMatch_(bankChecks, accountChecks);
     }
 
+    function populateCsvFiles() {
+      toast('Buscando archivos CSV en la carpeta BANCOS...');
+      google.script.run.withSuccessHandler(files => {
+        const sel = document.getElementById('csv-filename');
+        sel.innerHTML = ''; // Clear existing options
+        if (files.length === 0) {
+          toast('No se encontraron archivos CSV en la carpeta BANCOS.');
+          const o = document.createElement('option');
+          o.text = "No hay archivos CSV";
+          o.disabled = true;
+          sel.add(o);
+          return;
+        }
+        files.forEach(f => {
+          const o = document.createElement('option');
+          o.value = f;
+          o.text = f;
+          sel.add(o);
+        });
+        toast('Lista de archivos actualizada.');
+      }).withFailureHandler(err => toast('Error: ' + err.message))
+      .getBankCsvFiles();
+    }
+
     function init(){
       google.script.run.withSuccessHandler(ps=>{
         const sel=document.getElementById('periodo');
         ps.forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;sel.add(o);});
-        google.script.run.withSuccessHandler(v=>{sel.value=v||ps[0];}).apiGetConfig('PERIODO_LABEL');
+        google.script.run.withSuccessHandler(v=>{sel.value=v||ps[0];}).apiGetConfig('PERIODE_LABEL');
       }).getPeriodosUI();
+
+      populateCsvFiles(); // Populate CSV files on load
     }
   </script>
 </head>
@@ -166,9 +198,10 @@
 
   <section id="conciliacion">
     <h2>Conciliación Bancaria</h2>
-    <p>Suba su estado de cuenta en formato CSV a su carpeta de Drive y escriba el nombre del archivo aquí.</p>
-    <label for="csv-filename">Nombre del archivo:</label>
-    <input type="text" id="csv-filename" placeholder="estado_de_cuenta.csv" style="width: 200px;"/>
+    <p>Suba su estado de cuenta en formato CSV a la carpeta "BANCOS" en Drive y selecciónelo de la lista.</p>
+    <label for="csv-filename">Archivo de estado de cuenta:</label>
+    <select id="csv-filename" style="width: 220px;"></select>
+    <button onclick="populateCsvFiles()">Refrescar Lista</button>
     <button onclick="importarCSV()">1. Importar CSV</button>
     <hr style="margin: 20px 0;"/>
     <p>Una vez importado, ejecute la conciliación automática para encontrar coincidencias.</p>
