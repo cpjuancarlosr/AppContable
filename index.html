@@ -123,7 +123,77 @@
         .reconcileManualMatch_(bankChecks, accountChecks);
     }
 
+    let chartOfAccounts = []; // To store accounts for the dropdown
+
+    function addPolizaRow() {
+      const tableBody = document.getElementById('poliza-manual-table').getElementsByTagName('tbody')[0];
+      const newRow = tableBody.insertRow();
+
+      const cell1 = newRow.insertCell(0);
+      const cell2 = newRow.insertCell(1);
+      const cell3 = newRow.insertCell(2);
+      const cell4 = newRow.insertCell(3);
+
+      let options = chartOfAccounts.map(acc => `<option value="${acc.codigo}">${acc.codigo} - ${acc.nombre}</option>`).join('');
+      cell1.innerHTML = `<select class="pol-cuenta">${options}</select>`;
+      cell2.innerHTML = `<input type="number" class="pol-debe" oninput="updatePolizaTotals()" value="0">`;
+      cell3.innerHTML = `<input type="number" class="pol-haber" oninput="updatePolizaTotals()" value="0">`;
+      cell4.innerHTML = `<button onclick="this.parentNode.parentNode.remove(); updatePolizaTotals();">X</button>`;
+    }
+
+    function updatePolizaTotals() {
+      let totalDebe = 0;
+      let totalHaber = 0;
+      document.querySelectorAll('.pol-debe').forEach(input => totalDebe += parseFloat(input.value) || 0);
+      document.querySelectorAll('.pol-haber').forEach(input => totalHaber += parseFloat(input.value) || 0);
+
+      document.getElementById('total-debe').textContent = totalDebe.toFixed(2);
+      document.getElementById('total-haber').textContent = totalHaber.toFixed(2);
+    }
+
+    function guardarPolizaManual() {
+      const totalDebe = parseFloat(document.getElementById('total-debe').textContent);
+      const totalHaber = parseFloat(document.getElementById('total-haber').textContent);
+
+      if (totalDebe !== totalHaber) {
+        toast('Error: El Debe y el Haber no coinciden.');
+        return;
+      }
+      if (totalDebe === 0) {
+        toast('Error: La póliza no puede estar en ceros.');
+        return;
+      }
+
+      const polizaData = {
+        fecha: document.getElementById('pol-fecha').value,
+        concepto: document.getElementById('pol-desc').value,
+        rows: []
+      };
+
+      const tableRows = document.getElementById('poliza-manual-table').getElementsByTagName('tbody')[0].rows;
+      for (const row of tableRows) {
+        polizaData.rows.push({
+          cuenta: row.querySelector('.pol-cuenta').value,
+          debe: parseFloat(row.querySelector('.pol-debe').value) || 0,
+          haber: parseFloat(row.querySelector('.pol-haber').value) || 0
+        });
+      }
+
+      toast('Guardando póliza manual...');
+      google.script.run
+        .withSuccessHandler(result => toast(result))
+        .withFailureHandler(err => toast('Error: ' + err.message))
+        .guardarPolizaManual_(polizaData);
+    }
+
     function init(){
+      // Fetch chart of accounts on load
+      google.script.run.withSuccessHandler(accounts => {
+        chartOfAccounts = accounts;
+        addPolizaRow(); // Add initial row
+        addPolizaRow();
+      }).getCatCuentasForUI();
+
       google.script.run.withSuccessHandler(ps=>{
         const sel=document.getElementById('periodo');
         ps.forEach(p=>{const o=document.createElement('option');o.value=p;o.text=p;sel.add(o);});
@@ -137,6 +207,7 @@
   <a href="#" onclick="showSection('setup')">Setup</a>
   <a href="#" onclick="showSection('importar')">Importar</a>
   <a href="#" onclick="showSection('conta')">Contabilizar</a>
+  <a href="#" onclick="showSection('poliza-manual')">Póliza Manual</a>
   <a href="#" onclick="showSection('conciliacion')">Conciliación</a>
   <a href="#" onclick="showSection('imp')">Impuestos</a>
   <a href="#" onclick="showSection('entrega')">Entrega</a>
@@ -162,6 +233,39 @@
     <button onclick="runProcess('generarPolizasDesdeMovimientosUI')">🧩 Generar Pólizas</button>
     <br/><br/>
     <button onclick="runProcess('recalcularEstadosUI')">📐 Recalcular Estados Financieros</button>
+  </section>
+
+  <section id="poliza-manual">
+    <h2>Póliza Manual</h2>
+    <p>Registre transacciones que no tengan un CFDI asociado.</p>
+    <div>
+      <label for="pol-fecha">Fecha:</label>
+      <input type="date" id="pol-fecha">
+    </div>
+    <div style="margin-top: 10px;">
+      <label for="pol-desc">Concepto General:</label>
+      <input type="text" id="pol-desc" style="width: 250px;">
+    </div>
+    <table id="poliza-manual-table" style="margin-top: 15px; width: 100%;">
+      <thead>
+        <tr>
+          <th>Cuenta</th>
+          <th>Debe</th>
+          <th>Haber</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Filas se agregarán aquí dinámicamente -->
+      </tbody>
+    </table>
+    <button onclick="addPolizaRow()">+ Agregar Fila</button>
+    <hr style="margin: 20px 0;">
+    <div>
+      <strong>Total Debe:</strong> <span id="total-debe">0.00</span>
+      <strong style="margin-left: 20px;">Total Haber:</strong> <span id="total-haber">0.00</span>
+    </div>
+    <button onclick="guardarPolizaManual()" style="margin-top: 20px; font-weight: bold;">Guardar Póliza Manual</button>
   </section>
 
   <section id="conciliacion">

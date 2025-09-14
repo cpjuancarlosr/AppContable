@@ -68,6 +68,7 @@ function buildMenu_(){
   const ui = SpreadsheetApp.getUi();
   const menu = ui.createMenu(CFG.NOMBRE_SISTEMA);
 
+  menu.addItem("🚀 Mostrar Panel de Control", "showSidebar");
   menu.addItem("🚀 Mostrar Dashboard", "mostrarDashboard");
   menu.addSeparator();
 
@@ -121,6 +122,13 @@ function showPolizas() { showSheet("Polizas"); }
 function showBalanza() { showSheet("Balanza"); }
 function showER() { showSheet("EstadoResultados"); }
 function showBG() { showSheet("BalanceGeneral"); }
+
+function showSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('Panel de Control')
+      .setWidth(300);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
 
 /**
  * Activa y muestra la hoja del Dashboard.
@@ -1792,6 +1800,55 @@ function generarTextoGuion_() {
   return guion;
 }
 
+
+/********************  MANUAL_ENTRIES  ********************/
+function getCatCuentasForUI() {
+  const sh = SpreadsheetApp.getActive().getSheetByName("CatCuentas");
+  const data = sh.getRange(2, 1, Math.max(0, sh.getLastRow() - 1), 2).getValues();
+  return data.map(row => ({ codigo: row[0], nombre: row[1] }));
+}
+
+function guardarPolizaManual_(polizaData) {
+  if (!polizaData || !polizaData.fecha || !polizaData.rows || polizaData.rows.length === 0) {
+    throw new Error("Datos de la póliza inválidos.");
+  }
+
+  const ss = SpreadsheetApp.getActive();
+  const shPolizas = ss.getSheetByName("Polizas");
+  const shCatCuentas = ss.getSheetByName("CatCuentas");
+  const cuentasMap = mapearNombreCuenta_(shCatCuentas);
+
+  const fecha = new Date(polizaData.fecha);
+  const ref = polizaData.concepto || "Póliza Manual";
+
+  const rowsToAppend = polizaData.rows.map(r => {
+    if (!r.cuenta || (r.debe === 0 && r.haber === 0)) {
+      return null; // Skip empty rows
+    }
+    return [
+      fecha,
+      "Diario", // Tipo de póliza
+      ref,
+      r.cuenta,
+      cuentasMap[r.cuenta] || "Cuenta no encontrada", // Nombre Cuenta
+      ref, // Descripcion
+      r.debe,
+      r.haber,
+      "", // UUID
+      "Manual", // Origen
+      "", // CentroCosto
+      "" // Proyecto
+    ];
+  }).filter(r => r !== null);
+
+  if (rowsToAppend.length > 0) {
+    shPolizas.getRange(shPolizas.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    log(`${rowsToAppend.length} asientos manuales guardados.`);
+    return "Póliza manual guardada exitosamente.";
+  } else {
+    throw new Error("No hay filas válidas para guardar.");
+  }
+}
 
 /********************  MANUAL_RECONCILIATION  ********************/
 function getUnmatchedBankTxs() {
