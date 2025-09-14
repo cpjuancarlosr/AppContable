@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Rubik', sans-serif; background-color: #FFFFFF; color: #111111; }
+      input[type="file"] { margin-top: 10px; }
+      button { margin-top: 15px; background-color: #A6C2DB; color: #111111; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+      button:hover { background-color: #8BADCA; }
+      #status { margin-top: 10px; font-style: italic; }
+    </style>
+  </head>
+  <body>
+    <h3>Subir Estado de Cuenta (PDF o CSV)</h3>
+    <p>Seleccione el archivo de su estado de cuenta bancario.</p>
+    <form id="uploadForm">
+      <input type="file" name="file" id="fileInput">
+      <br>
+      <button type="submit">Subir y Procesar</button>
+    </form>
+    <div id="status"></div>
+
+    <script>
+      document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) {
+          document.getElementById('status').innerText = 'Por favor, seleccione un archivo.';
+          return;
+        }
+
+        document.getElementById('status').innerText = 'Subiendo archivo...';
+
+        const fr = new FileReader();
+        fr.onload = function(e) {
+          const fileData = {
+            fileName: file.name,
+            mimeType: file.type,
+            base64Data: e.target.result.split(',')[1]
+          };
+          google.script.run
+            .withSuccessHandler(function(response) {
+              document.getElementById('status').innerText = response;
+              // Close the dialog automatically after a few seconds
+              setTimeout(function() { google.script.host.close(); }, 4000);
+            })
+            .withFailureHandler(function(err) {
+              document.getElementById('status').innerText = 'Error: ' + err.message;
+            })
+            .importarMovimientosBancarios(fileData);
+        };
+        fr.readAsDataURL(file);
+      });
+    </script>
+  </body>
+</html>
