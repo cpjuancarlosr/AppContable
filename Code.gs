@@ -1971,10 +1971,6 @@ function enviarPaqueteFiscalUI() {
 
 
 /********************  WEB APP & CONFIG API  ********************/
-function doGet(){
-  return HtmlService.createHtmlOutputFromFile('index');
-}
-
 function getPeriodosUI(){
   const res=[]; const d=new Date(); d.setDate(1);
   for(let i=0;i<24;i++){

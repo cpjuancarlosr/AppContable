@@ -4,20 +4,86 @@
   <meta charset="UTF-8">
   <title>Sistema Contable MX</title>
   <style>
-    body{margin:0;font-family:Arial, sans-serif;background:#fff;color:#000;}
-    nav{position:fixed;top:0;left:0;width:160px;height:100vh;background:#000;color:#fff;}
-    nav a{display:block;padding:10px;color:#CBE290;text-decoration:none;}
-    nav a:hover{background:#402924;color:#fff;}
-    main{margin-left:160px;padding:1rem;}
-    section{display:none;}
-    section.active{display:block;}
-    #toast{position:fixed;bottom:1rem;right:1rem;background:#000B26;color:#fff;padding:8px 12px;border-radius:4px;display:none;}
+    /* General styles */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+      color: #202124;
+    }
+    main {
+      padding: 1rem;
+    }
+    section {
+      display: none;
+    }
+    section.active {
+      display: block;
+    }
+
+    /* Header and Navigation */
+    .header {
+      background-color: #fff;
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    #nav-select {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+    }
+
+    /* Buttons and Inputs */
+    button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    input[type="text"], input[type="date"], input[type="number"], select {
+        width: 95%;
+        padding: 8px;
+        margin-top: 4px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+
+    /* Toast notification */
+    #toast {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      right: 1rem;
+      background-color: #323232;
+      color: white;
+      padding: 12px;
+      border-radius: 4px;
+      display: none;
+      text-align: center;
+    }
     a,select,button{color:#7CA7EB;}
   </style>
   <script>
     function showSection(id){
       document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
       document.getElementById(id).classList.add('active');
+      // Update dropdown to match the current section
+      document.getElementById('nav-select').value = id;
     }
     function toast(msg,link){
       const t=document.getElementById('toast');
@@ -203,16 +269,21 @@
   </script>
 </head>
 <body onload="init()">
-<nav>
-  <a href="#" onclick="showSection('setup')">Setup</a>
-  <a href="#" onclick="showSection('importar')">Importar</a>
-  <a href="#" onclick="showSection('conta')">Contabilizar</a>
-  <a href="#" onclick="showSection('poliza-manual')">Póliza Manual</a>
-  <a href="#" onclick="showSection('conciliacion')">Conciliación</a>
-  <a href="#" onclick="showSection('imp')">Impuestos</a>
-  <a href="#" onclick="showSection('entrega')">Entrega</a>
-  <a href="#" onclick="showSection('tablas')">Tablas</a>
-</nav>
+
+<div class="header">
+  <h1>Panel de Control</h1>
+  <select id="nav-select" onchange="showSection(this.value)">
+    <option value="setup">Setup</option>
+    <option value="importar">Importar</option>
+    <option value="conta">Contabilizar</option>
+    <option value="poliza-manual">Póliza Manual</option>
+    <option value="conciliacion">Conciliación</option>
+    <option value="imp">Impuestos</option>
+    <option value="entrega">Entrega</option>
+    <option value="tablas">Tablas</option>
+  </select>
+</div>
+
 <main>
   <section id="setup" class="active">
     <h2>Setup</h2>
